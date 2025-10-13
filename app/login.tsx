@@ -5,17 +5,19 @@ import { getFirebaseAuth } from "../src/firebase/init";
 import { useAuthStore } from "../src/store/useAuthStore";
 
 export default function Login() {
-  const setUser = useAuthStore((s: { setUser: any; }) => s.setUser);
+  const setUser = useAuthStore((s: { setUser: any }) => s.setUser);
 
   async function handleAnon() {
     try {
       const auth = getFirebaseAuth();
       const result = await signInAnonymously(auth);
       setUser({ uid: result.user.uid });
-    } catch (e) {
+      console.log("Signed in anonymously with uid:", result.user.uid);
+    } catch (error) {
+      console.error("Failed to sign in anonymously", error);
       // If Firebase not configured, fallback to fake auth
       setUser({ uid: "fake-uid" });
-      Alert.alert("Note", "Firebase not configured — using placeholder auth.");
+      Alert.alert("Note", "Firebase not configured - using placeholder auth.");
     }
   }
 
