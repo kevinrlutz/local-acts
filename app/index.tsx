@@ -5,7 +5,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "rea
 
 import { auth } from "../src/lib/firebase";
 
-const SIGN_UP_ROUTE = "/(auth)/sign-up" as Href;
+const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href;
 
 export default function Index() {
@@ -18,7 +18,7 @@ export default function Index() {
       setUser(nextUser);
       setCheckingAuth(false);
       if (!nextUser) {
-        router.replace(SIGN_UP_ROUTE);
+        router.replace(LOGIN_ROUTE);
       }
     });
     return unsubscribe;

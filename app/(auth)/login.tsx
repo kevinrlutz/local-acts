@@ -1,5 +1,5 @@
 import { Href, useRouter } from 'expo-router'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
+import { signInWithEmailAndPassword } from 'firebase/auth'
 import React, { useState } from 'react'
 import {
     ActivityIndicator,
@@ -17,47 +17,48 @@ import {
 } from 'react-native'
 
 import { auth } from '@/src/lib/firebase'
-const validatePasswords = (password: string, confirmPassword: string) => {
-  if (password.length < 8) {
-    throw new Error('Password must be at least 8 characters long.')
-  }
-  if (password !== confirmPassword) {
-    throw new Error('Passwords do not match.')
-  }
-}
 
-export default function SignUpScreen() {
+const SIGN_UP_ROUTE = '/(auth)/sign-up' as Href
+const HOME_ROUTE = '/' as Href
+
+export default function LoginScreen() {
   const router = useRouter()
-  const accountSetupRoute = '/(auth)/account-setup' as Href
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const showError = (message: string) => {
     setError(message)
-    Alert.alert('Sign up error', message)
+    Alert.alert('Login error', message)
   }
 
-  const navigateToAccountSetup = () => {
-    router.replace(accountSetupRoute)
+  const navigateHome = () => {
+    router.replace(HOME_ROUTE)
   }
 
-  const handleEmailSignup = async () => {
+  const goToSignUp = () => {
+    router.push(SIGN_UP_ROUTE)
+  }
+
+  const handleLogin = async () => {
     try {
       setIsSubmitting(true)
       setError(null)
-      validatePasswords(password, confirmPassword)
       const normalizedEmail = email.trim().toLowerCase()
       if (!normalizedEmail) {
         throw new Error('Email address is required.')
       }
-      await createUserWithEmailAndPassword(auth, normalizedEmail, password)
-      navigateToAccountSetup()
+      if (!password) {
+        throw new Error('Password is required.')
+      }
+      await signInWithEmailAndPassword(auth, normalizedEmail, password)
+      navigateHome()
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Unable to create your account.'
+        err instanceof Error
+          ? err.message
+          : 'Unable to sign you in. Please try again.'
       showError(message)
     } finally {
       setIsSubmitting(false)
@@ -88,65 +89,57 @@ export default function SignUpScreen() {
             </Text>
           </View>
 
-          <View style={styles.header}>
-            <Text style={styles.title}>Create your account</Text>
+          <View style={styles.formContainer}>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                inputMode="email"
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                placeholder="you@email.com"
+                style={styles.input}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="Enter your password"
+                style={styles.input}
+              />
+            </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <Pressable
+              style={[
+                styles.primaryButton,
+                isSubmitting && styles.buttonDisabled,
+              ]}
+              onPress={handleLogin}
+              disabled={isSubmitting}
+              accessibilityRole="button"
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Log In</Text>
+              )}
+            </Pressable>
           </View>
 
-            <View style={styles.formContainer}>
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              inputMode="email"
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              placeholder="you@email.com"
-              style={styles.input}
-            />
+          <View style={styles.createAccountRow}>
+            <Text style={styles.createAccountText}>Need an account?</Text>
+            <Pressable onPress={goToSignUp} accessibilityRole="button">
+              <Text style={styles.createAccountLink}>Create one</Text>
+            </Pressable>
           </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="Create a password"
-              style={styles.input}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              placeholder="Re-enter password"
-              style={styles.input}
-            />
-          </View>
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          <Pressable
-            style={[
-              styles.primaryButton,
-              isSubmitting && styles.buttonDisabled,
-            ]}
-            onPress={handleEmailSignup}
-            disabled={isSubmitting}
-            accessibilityRole="button"
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Create Account</Text>
-            )}
-          </Pressable>
-        </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -169,11 +162,6 @@ const styles = StyleSheet.create({
   header: {
     gap: 10,
     alignItems: 'center',
-  },
-  logo: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
   },
   title: {
     fontSize: 28,
@@ -216,6 +204,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F97316',
     paddingVertical: 14,
     borderRadius: 12,
+    marginTop: 8,
     alignItems: 'center',
     width: '60%',
   },
@@ -226,5 +215,23 @@ const styles = StyleSheet.create({
     color: '#0F0E12',
     fontWeight: '700',
     fontSize: 16,
+  },
+  createAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  createAccountText: {
+    color: '#A5A6AB',
+  },
+  createAccountLink: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  logo: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
   },
 })

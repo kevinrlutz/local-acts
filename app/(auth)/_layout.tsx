@@ -11,6 +11,13 @@ export default function AuthLayout() {
       }}
     >
       <Stack.Screen
+        name="login"
+        options={{
+          title: "Log in",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="sign-up"
         options={{
           title: "Create account",
