@@ -1,106 +1,96 @@
 # LocalActs (Expo + TypeScript starter)
 
-This repo contains a minimal Expo (TypeScript) app scaffolded to integrate Firebase (Web v9 modular), React Query, Zustand, and Expo Router.
+LocalActs is an Expo-managed (TypeScript) application that now ships with a complete Firebase authentication flow, Google OAuth via Expo AuthSession, role-based onboarding, and gated navigation for fan and artist experiences.
 
-Key files and where to paste Firebase config:
+## Firebase & OAuth configuration
 
-- `src/firebase/firebaseConfig.ts` — paste your Firebase config for `dev` and `prod` into the provided objects.
-- `app.config.js` — sets `EXPO_RUNTIME_ENV` into `process.env`/`Constants.manifest.extra` so `src/firebase/init.ts` can pick the right config at runtime.
+1. Provide your Firebase web credentials via environment variables consumed by `app.config.js`:
+   - `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_STORAGE_BUCKET`, `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_APP_ID`
+2. Configure Google OAuth client IDs for Expo AuthSession:
+   - `GOOGLE_EXPO_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`
+3. `src/firebase/config.ts` validates all Firebase values at runtime; missing keys will throw with guidance.
+4. `src/firebase/init.ts` initialises the modular SDK, using AsyncStorage-backed persistence so auth survives restarts in the managed workflow.
 
-How the runtime config works:
+## Auth module structure
 
-- At build/run time set `EXPO_RUNTIME_ENV=prod` or `EXPO_RUNTIME_ENV=dev` (default: `dev`).
-- The app reads that value using `process.env.EXPO_RUNTIME_ENV` (Node) or `Constants.manifest.extra.runtimeEnv` in managed Expo if you prefer.
-
-Minimal file tree (created/modified):
-
-app/
-  _layout.tsx         — wraps router with Providers + AuthGate
-  index.tsx           — landing page
-  home.tsx            — Home screen
-  login.tsx           — Login placeholder
-src/
-  firebase/
-    firebaseConfig.ts — place your firebase placeholders here
-    init.ts           — initializes firebase (modular SDK) based on env
-  providers/
-    Providers.tsx     — QueryClient + SafeArea + initFirebase
-  auth/
-    AuthGate.tsx      — subscribes to onAuthStateChanged and updates store
-  store/
-    useAuthStore.ts   — minimal Zustand store for user state
-
-Dependencies to install (see package.json):
-
-- firebase
-- @tanstack/react-query
-- zustand
-
-Usage notes:
-
-- Fill `src/firebase/firebaseConfig.ts` with your real config values.
-- Start in dev: `EXPO_RUNTIME_ENV=dev expo start` (Windows PowerShell: use `$env:EXPO_RUNTIME_ENV = 'dev'; expo start`).
-- Build for prod: set `EXPO_RUNTIME_ENV=prod` in your CI or local env before building.
-
-Important: do NOT import `dotenv` in client-side code (any file under `app/` or used by Metro).
-`dotenv` depends on Node built-ins (like `crypto`) and will break the Expo runtime. Use one of these
-patterns instead:
-
-- Use `app.config.js` (already present) to pass runtime values via `extra` and read them with
-  `expo-constants` or `process.env` at build time.
-- Use EAS secrets / environment variables in CI for production credentials.
-- For local dev, set `EXPO_RUNTIME_ENV` in PowerShell before starting Expo, e.g.:
-
-```powershell
-$env:EXPO_RUNTIME_ENV = 'dev'; expo start
 ```
-# Welcome to your Expo app 👋
+src/
+  auth/
+    AuthGate.tsx               // listens for auth state, fetches Firestore profile, drives routing
+    errors.ts                  // Firebase error → user-friendly message mapping
+    screens/
+      LoginScreen.tsx          // email/password login + Google AuthSession sign-in
+      SignupScreen.tsx         // account creation with name capture
+      ResetPasswordScreen.tsx  // password reset via email
+      RoleSelectScreen.tsx     // fan vs artist selection + Firestore profile write
+  firebase/
+    config.ts                  // centralised Firebase config sourced from app.config.js extras
+    init.ts                    // lazy accessors for app/auth/firestore instances
+  providers/
+    Providers.tsx              // SafeArea + React Query + Firebase bootstrap wrapper
+  store/
+    useAuthStore.ts            // Zustand store for auth status, user payload, and sign-out helper
+  types/
+    auth.ts                    // shared UserRole, AppUser, and AuthStatus types
+app/
+  _layout.tsx                  // wraps router with Providers + AuthGate
+  (auth)/                      // login, signup, reset-password screens
+  (role)/role-select.tsx       // role onboarding
+  (fan)/fan/...                // fan stack (discover, favorites)
+  (artist)/artist/...          // artist stack (profile, shows)
+```
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Firestore document shape
 
-## Get started
+Role metadata is persisted to `users/{uid}` when the role is chosen:
 
-1. Install dependencies
+```json
+{
+  "displayName": "User supplied name",
+  "role": "fan" | "artist",
+  "createdAt": serverTimestamp(),
+  "updatedAt": serverTimestamp()
+}
+```
+
+Extend this document with additional fan/artist profile fields as you expand LocalActs.
+
+## Manual test checklist
+
+1. **Signup** – create a new email/password account, confirm the role selector appears, choose a role, and verify navigation to the correct stack. Relaunch to confirm persistence.
+2. **Email login** – sign in with an existing user whose role is already set and ensure you are routed to the proper stack automatically.
+3. **Password reset** – request a reset email and confirm the confirmation message appears and the email arrives.
+4. **Google sign-in** – after configuring OAuth IDs, authenticate with Google and ensure Firebase logs you in and routing follows the stored role.
+5. **Role enforcement** – delete the `role` field for a user in Firestore and relaunch; you should be taken back to the RoleSelect screen until a role is saved.
+6. **Logout** – sign out from both fan and artist flows; you should land on the login screen with state cleared.
+
+Run `npm install` after updating environment values so the project picks up `firebase`, `expo-auth-session`, `@tanstack/react-query`, `zustand`, and other dependencies.
+
+### Important note about env handling
+
+Do **not** import `dotenv` in client-side Expo code (anything under `app/` or bundled by Metro). `dotenv` pulls in Node-only modules and will crash the app. Use `app.config.js` (already configured) or EAS secrets instead.
+
+## Getting started
+
+1. Install dependencies:
 
    ```bash
    npm install
    ```
 
-2. Start the app
+2. Start the Expo development server:
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Scan the QR code with Expo Go, run on an emulator, or use a development build as needed.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+The project uses Expo Router, so screens are organised by file structure in the `app/` directory. When you are ready for a fresh scaffold run `npm run reset-project` to archive the example screens.
 
 ## Learn more
 
-To learn more about developing your project with Expo, look at the following resources:
+- [Expo documentation](https://docs.expo.dev/)
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/)
+- [Firebase for Web v9](https://firebase.google.com/docs/web/modular-upgrade)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
