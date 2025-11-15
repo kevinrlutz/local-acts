@@ -2,12 +2,39 @@
 
 LocalActs is an Expo-managed (TypeScript) application that now ships with a complete Firebase authentication flow, Google OAuth via Expo AuthSession, role-based onboarding, and gated navigation for fan and artist experiences.
 
+## Current onboarding flow
+
+- `app/(auth)/sign-up.tsx` handles email/password account creation alongside Google OAuth using the Firebase JS SDK.
+- `app/(auth)/account-setup.tsx` collects the user's display name plus either a zip code or city/state combination, geocodes it through Mapbox, and persists the coordinates to Firestore.
+- `src/lib/firebase.ts` centralises the Firebase bootstrap (including React Native persistence) so both screens share the same auth + database instances.
+- `src/services/mapbox.ts` and `src/services/userProfile.ts` wrap third-party calls to keep the screens lightweight.
+
+## Required environment variables
+
+These values must be surfaced through `app.config.js` (or EAS secrets) using the Expo `EXPO_PUBLIC_` prefix so they are available at runtime:
+
+| Variable | Purpose |
+| --- | --- |
+| `EXPO_PUBLIC_FIREBASE_API_KEY` | Firebase web API key |
+| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project id |
+| `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase sender id |
+| `EXPO_PUBLIC_FIREBASE_APP_ID` | Firebase app id |
+| `EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID` | (Optional) Firebase measurement id |
+| `EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID` | Google OAuth client for Expo Go |
+| `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` | Google OAuth client for Android dev builds |
+| `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | Google OAuth client for iOS dev builds |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google OAuth client for web |
+| `EXPO_PUBLIC_MAPBOX_TOKEN` | Mapbox geocoding access token |
+
+Without these variables the signup and account setup screens will block submission with descriptive errors so issues are caught before production.
+
 ## Firebase & OAuth configuration
 
-1. Provide your Firebase web credentials via environment variables consumed by `app.config.js`:
-   - `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_STORAGE_BUCKET`, `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_APP_ID`
-2. Configure Google OAuth client IDs for Expo AuthSession:
-   - `GOOGLE_EXPO_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`
+1. Provide your Firebase web credentials via environment variables consumed by `app.config.js` (see `EXPO_PUBLIC_*` table above).
+2. Configure Google OAuth client IDs for Expo AuthSession (again using the `EXPO_PUBLIC_GOOGLE_*` variables listed above).
+3. Supply `EXPO_PUBLIC_MAPBOX_TOKEN` for the account-setup geocoder before shipping.
 3. `src/firebase/config.ts` validates all Firebase values at runtime; missing keys will throw with guidance.
 4. `src/firebase/init.ts` initialises the modular SDK, using AsyncStorage-backed persistence so auth survives restarts in the managed workflow.
 
