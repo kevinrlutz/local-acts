@@ -40,10 +40,14 @@ export default function UpdateLocationScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = "Update Location";
+    if (typeof document !== "undefined") {
+      document.title = "Update Location";
+    }
 
     return () => {
+      if (typeof document !== "undefined") {
         document.title = "Local Acts";
+      }
     };
   }, []);
 

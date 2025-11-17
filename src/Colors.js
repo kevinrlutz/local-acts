@@ -20,6 +20,14 @@ const Colors = {
     successGreen: '#8BC34A',
     /** Used for content borders */
     contentBorder: '#2B2C33',
+
+    // --- Social Media Colors ---
+    /** Spotify brand color */
+    spotify: '#1ED860',
+    /** Apple Music brand color */
+    appleMusic: '#FA57C1',
+    /** Instagram brand color */
+    instagram: '#E1306C',
 }
 
 export default Colors;

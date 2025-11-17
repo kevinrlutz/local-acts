@@ -22,6 +22,7 @@ export type AppUser = {
   displayName?: string | null;
   role?: UserRole | null;
   photoUrl?: string | null;
+  hasActProfile?: boolean | null;
   createdAt?: Date | null;
   location?: UserLocation | null;
 };

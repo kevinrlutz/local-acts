@@ -2,18 +2,18 @@ import { Href, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { auth } from "@/src/lib/firebase";
@@ -40,10 +40,14 @@ export default function AccountSetupScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = "Account Setup";
+    if (typeof document !== "undefined") {
+      document.title = "Account Setup";
+    }
 
     return () => {
-        document.title = "Local Acts";
+        if (typeof document !== "undefined") {
+          document.title = "Local Acts";
+        }
     };
   }, []);
 

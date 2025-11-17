@@ -2,19 +2,19 @@ import { Href, useRouter } from 'expo-router'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import React, { useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native'
 
 import { auth } from '@/src/lib/firebase'
@@ -35,7 +35,9 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    document.title = "Login - Local Acts";
+    if (typeof document !== "undefined") {
+      document.title = "Login - Local Acts";
+    }
   }, []);
 
   const showError = (message: string) => {

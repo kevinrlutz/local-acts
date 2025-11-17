@@ -24,6 +24,12 @@ export default function RootLayout() {
         }}
       />
       <Stack.Screen
+        name="act"
+        options={{
+          title: "Act Profile",
+        }}
+      />
+      <Stack.Screen
         name="update-location"
         options={{
           title: "Update Location",

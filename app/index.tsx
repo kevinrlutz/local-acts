@@ -1,7 +1,7 @@
 import { Href, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Dimensions, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { auth } from "../src/lib/firebase";
 import { getAppUserFromFirestore } from "../src/services/userProfile";
@@ -12,9 +12,8 @@ import Colors from "../src/Colors";
 const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href;
 const UPDATE_LOCATION_ROUTE = "/update-location" as Href;
-
-const { width: screenWidth } = Dimensions.get('window');
-const isMobile = screenWidth < 768;
+const CREATE_ACT_ROUTE = "/act/create-act" as Href;
+const ACT_PROFILE_ROUTE = "/act" as Href;
 
 export default function Index() {
   const router = useRouter();
@@ -23,7 +22,9 @@ export default function Index() {
   const [userProfile, setUserProfile] = useState<AppUser | null>(null);
 
   useEffect(() => {
-    document.title = "Local Acts";
+    if (typeof document !== "undefined") {
+      document.title = "Local Acts";
+    }
   }, []);
 
   useEffect(() => {
@@ -65,6 +66,13 @@ export default function Index() {
 
   const goToSetup = () => router.push(ACCOUNT_SETUP_ROUTE);
   const goToUpdateLocation = () => router.push(UPDATE_LOCATION_ROUTE);
+  const goToAct = () => {
+    if (userProfile?.hasActProfile && user?.uid) {
+      router.push((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(user.uid)}`) as Href);
+      return;
+    }
+    router.push(CREATE_ACT_ROUTE);
+  };
 
   if (checkingAuth) {
     return (
@@ -97,6 +105,11 @@ export default function Index() {
 
       <View style={styles.formContainer}>
         <View style={styles.actions}>
+          <Pressable style={styles.tertiaryButton} onPress={goToAct}>
+            <Text style={styles.tertiaryButtonText}>
+              {userProfile?.hasActProfile ? "Manage Act Profile" : "Create Act Profile"}
+            </Text>
+          </Pressable>
           <Pressable style={styles.primaryButton} onPress={userProfile?.location?.rawInput ? goToUpdateLocation : goToSetup}>
             <Text style={styles.primaryButtonText}>{userProfile?.location?.rawInput ? 'Update Location' : 'Finish Profile Setup'}</Text>
           </Pressable>
@@ -147,7 +160,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
+  tertiaryButton: {
+    backgroundColor: Colors.secondaryAction,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
   primaryButtonText: {
+    color: Colors.secondaryBackground,
+    fontWeight: "700",
+  },
+  tertiaryButtonText: {
     color: Colors.secondaryBackground,
     fontWeight: "700",
   },
