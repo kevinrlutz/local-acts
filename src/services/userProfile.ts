@@ -21,16 +21,20 @@ export const saveCompletedProfile = async ({
   displayName,
   location,
 }: CompleteProfilePayload) => {
+  const userDocRef = doc(db, "users", uid);
+  const docSnap = await getDoc(userDocRef);
+  const isNew = !docSnap.exists();
+
   await setDoc(
-    doc(db, "users", uid),
+    userDocRef,
     {
       displayName,
       location,
       profileCompleted: true,
       updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
+      ...(isNew && { createdAt: serverTimestamp() }),
     },
-    { merge: false }
+    { merge: true }
   );
 
   if (auth.currentUser?.uid === uid) {

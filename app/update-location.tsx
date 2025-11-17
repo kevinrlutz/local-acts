@@ -31,7 +31,7 @@ export default function UpdateLocationScreen() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [isCheckingUser, setIsCheckingUser] = useState(!auth.currentUser);
-  const [displayName, setDisplayName] = useState(auth.currentUser?.displayName ?? "");
+  const [displayName] = useState(auth.currentUser?.displayName ?? "");
   const [locationMode, setLocationMode] = useState<LocationMode>("zip");
   const [zip, setZip] = useState("");
   const [city, setCity] = useState("");

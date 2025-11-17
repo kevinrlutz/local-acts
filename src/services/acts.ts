@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, setDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, DocumentData, getDoc, getDocs, serverTimestamp, setDoc, Timestamp } from "firebase/firestore";
 
 import { db } from "@/src/lib/firebase";
 import type { ActProfile, ActSocialLinks, CreateActProfilePayload } from "@/src/types/acts";
@@ -17,6 +17,25 @@ const sanitizeLinks = (links?: ActSocialLinks) => {
 };
 
 // ...existing code...
+
+const toDateOrNull = (value: unknown) => (value instanceof Timestamp ? value.toDate() : null);
+
+const mapActSnapshot = (id: string, data: DocumentData): ActProfile => ({
+  id,
+  ownerUid: (data.ownerUid as string) ?? id,
+  name: data.name as string,
+  category: data.category as ActProfile["category"],
+  profileImageRef: data.profileImageRef as string,
+  links: (data.links as ActSocialLinks | undefined) ?? null,
+  location: data.location as ActProfile["location"],
+  createdAt: toDateOrNull(data.createdAt),
+  updatedAt: toDateOrNull(data.updatedAt),
+});
+
+export const getAllActs = async (): Promise<ActProfile[]> => {
+  const actsSnapshot = await getDocs(collection(db, "acts"));
+  return actsSnapshot.docs.map((docSnap) => mapActSnapshot(docSnap.id, docSnap.data()));
+};
 
 export const createActProfile = async ({
   ownerUid,
@@ -57,8 +76,6 @@ export const createActProfile = async ({
 
 // ...existing code...
 
-const toDateOrNull = (value: unknown) => (value instanceof Timestamp ? value.toDate() : null);
-
 export const getActProfileById = async (actUid: string): Promise<ActProfile> => {
   const actDocRef = doc(db, "acts", actUid);
   const actSnap = await getDoc(actDocRef);
@@ -66,16 +83,5 @@ export const getActProfileById = async (actUid: string): Promise<ActProfile> => 
     throw new Error("Act profile not found.");
   }
 
-  const data = actSnap.data();
-  return {
-    id: actSnap.id,
-    ownerUid: (data.ownerUid as string) ?? actSnap.id,
-    name: data.name as string,
-    category: data.category as ActProfile["category"],
-    profileImageRef: data.profileImageRef as string,
-    links: (data.links as ActSocialLinks | undefined) ?? null,
-    location: data.location as ActProfile["location"],
-    createdAt: toDateOrNull(data.createdAt),
-    updatedAt: toDateOrNull(data.updatedAt),
-  };
+  return mapActSnapshot(actSnap.id, actSnap.data());
 };
