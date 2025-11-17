@@ -1,8 +1,9 @@
 import { updateProfile } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "@/src/lib/firebase";
 import type { GeocodeLocationResult, LocationMode } from "@/src/services/mapbox";
+import { AppUser } from '../types/auth';
 
 export type UserLocationPayload = GeocodeLocationResult & {
   rawInput: string;
@@ -20,10 +21,6 @@ export const saveCompletedProfile = async ({
   displayName,
   location,
 }: CompleteProfilePayload) => {
-  console.log(db.toJSON());
-  console.log("Saving profile for user:", uid);
-  console.log("Display Name:", displayName);
-  console.log("Location:", location);
   await setDoc(
     doc(db, "users", uid),
     {
@@ -35,10 +32,21 @@ export const saveCompletedProfile = async ({
     },
     { merge: false }
   );
-  console.log('Profile saved successfully for user:', uid);
 
   if (auth.currentUser?.uid === uid) {
     await updateProfile(auth.currentUser, { displayName });
   }
 };
+
+export const getAppUserFromFirestore = async (
+    uid: string
+): Promise<AppUser> => {
+    const docRef = doc(db, 'users', uid)
+    const docSnap = await getDoc(docRef)
+    if (docSnap.exists()) {
+        return docSnap.data() as AppUser
+    } else {
+        throw new Error('No such user profile!')
+    }
+}
 

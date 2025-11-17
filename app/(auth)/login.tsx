@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     Image,
     KeyboardAvoidingView,
     Platform,
@@ -17,6 +18,11 @@ import {
 } from 'react-native'
 
 import { auth } from '@/src/lib/firebase'
+
+import Colors from '../../src/Colors'
+
+const { width: screenWidth } = Dimensions.get('window');
+const isMobile = screenWidth < 768;
 
 const SIGN_UP_ROUTE = '/(auth)/sign-up' as Href
 const HOME_ROUTE = '/' as Href
@@ -68,9 +74,9 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
-        keyboardVerticalOffset={24}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
         <ScrollView
           contentContainerStyle={styles.content}
@@ -100,6 +106,7 @@ export default function LoginScreen() {
                 autoComplete="email"
                 keyboardType="email-address"
                 placeholder="you@email.com"
+                placeholderTextColor={Colors.primaryWhite}
                 style={styles.input}
               />
             </View>
@@ -111,6 +118,7 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 secureTextEntry
                 placeholder="Enter your password"
+                placeholderTextColor={Colors.primaryWhite}
                 style={styles.input}
               />
             </View>
@@ -149,15 +157,17 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0E0F0F',
+    backgroundColor: Colors.background,
   },
   flex: {
     flex: 1,
   },
   content: {
     flexGrow: 1,
-    padding: 24,
+    padding: isMobile ? 12 : 24,
     gap: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     gap: 10,
@@ -166,10 +176,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '600',
-    color: '#fff',
+    color: Colors.primaryWhite,
   },
   subtitle: {
-    color: '#A5A6AB',
+    color: Colors.secondaryGray,
     fontSize: 16,
   },
   formContainer: {
@@ -179,21 +189,21 @@ const styles = StyleSheet.create({
   formGroup: {
     gap: 6,
     marginBottom: 12,
-    width: '60%',
+    width: isMobile ? '100%' : '60%',
   },
   label: {
-    color: '#E0E0E5',
+    color: Colors.primaryWhite,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#2B2C33',
+    borderColor: Colors.contentBorder,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#1A1B21',
-    color: '#fff',
+    backgroundColor: Colors.secondaryBackground,
+    color: Colors.primaryWhite,
   },
   errorText: {
     color: '#FF5A5F',
@@ -201,18 +211,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   primaryButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: Colors.action,
     paddingVertical: 14,
     borderRadius: 12,
     marginTop: 8,
     alignItems: 'center',
-    width: '60%',
+    width: isMobile ? '100%' : '60%',
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: '#0F0E12',
+    color: Colors.secondaryBackground,
     fontWeight: '700',
     fontSize: 16,
   },
@@ -223,10 +233,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   createAccountText: {
-    color: '#A5A6AB',
+    color: Colors.secondaryGray,
   },
   createAccountLink: {
-    color: '#fff',
+    color: Colors.primaryWhite,
     fontWeight: '600',
   },
   logo: {

@@ -1,8 +1,8 @@
 import { Stack } from "expo-router";
 import React from "react";
-import Colors from '../../src/Colors';
+import Colors from '../src/Colors';
 
-export default function AuthLayout() {
+export default function RootLayout() {
   return (
     <Stack
       screenOptions={{
@@ -12,23 +12,21 @@ export default function AuthLayout() {
       }}
     >
       <Stack.Screen
-        name="login"
+        name="index"
         options={{
-          title: "Log in",
           headerShown: false,
         }}
       />
       <Stack.Screen
-        name="sign-up"
+        name="(auth)"
         options={{
-          title: "Create account",
           headerShown: false,
         }}
       />
       <Stack.Screen
-        name="account-setup"
+        name="update-location"
         options={{
-          title: "Finish setup",
+          title: "Update Location",
         }}
       />
     </Stack>

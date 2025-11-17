@@ -11,8 +11,6 @@ const app = initializeApp({
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 });
 
-console.log("Firebase app initialized with project ID:", process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID);
-
 const auth = getAuth(app);
 const db = getFirestore(app, "local-acts1");
 export { auth, db };

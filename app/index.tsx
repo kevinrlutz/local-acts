@@ -1,17 +1,26 @@
 import { Href, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Dimensions, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { auth } from "../src/lib/firebase";
+import { getAppUserFromFirestore } from "../src/services/userProfile";
+
+import { AppUser } from '@/src/types/auth';
+import Colors from "../src/Colors";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href;
+const UPDATE_LOCATION_ROUTE = "/update-location" as Href;
+
+const { width: screenWidth } = Dimensions.get('window');
+const isMobile = screenWidth < 768;
 
 export default function Index() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser);
+  const [userProfile, setUserProfile] = useState<AppUser | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -24,6 +33,23 @@ export default function Index() {
     return unsubscribe;
   }, [router]);
 
+  useEffect(() => {
+    if (user) {
+      const fetchProfile = async () => {
+        try {
+          const profile = await getAppUserFromFirestore(user.uid);
+          setUserProfile(profile);
+        } catch (error) {
+          console.error("Failed to fetch user profile:", error);
+          // Optionally, set a default or handle error
+        }
+      };
+      fetchProfile();
+    } else {
+      setUserProfile(null);
+    }
+  }, [user]);
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -34,6 +60,7 @@ export default function Index() {
   };
 
   const goToSetup = () => router.push(ACCOUNT_SETUP_ROUTE);
+  const goToUpdateLocation = () => router.push(UPDATE_LOCATION_ROUTE);
 
   if (checkingAuth) {
     return (
@@ -49,18 +76,30 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome back</Text>
+      <Image
+        source={require('@/assets/images/icon.png')}
+        style={styles.logo}
+        accessibilityRole="image"
+        accessibilityLabel="Local Acts logo"
+      />
+      <Text style={styles.title}>Local Acts</Text>
       <Text style={styles.subtitle}>
-        {user.displayName || user.email || "New Local Acts fan"}
+        Welcome back, {user.displayName || user.email || "New Local Acts fan"}!
       </Text>
 
-      <View style={styles.actions}>
-        <Pressable style={styles.primaryButton} onPress={goToSetup}>
-          <Text style={styles.primaryButtonText}>Update location</Text>
-        </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={handleSignOut}>
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
-        </Pressable>
+      <Text style={styles.subtitle}>
+        Currently discovering acts in {userProfile?.location?.city + ', ' + userProfile?.location?.state || "Unknown"}
+      </Text>
+
+      <View style={styles.formContainer}>
+        <View style={styles.actions}>
+          <Pressable style={styles.primaryButton} onPress={userProfile?.location?.rawInput ? goToUpdateLocation : goToSetup}>
+            <Text style={styles.primaryButtonText}>{userProfile?.location?.rawInput ? 'Update Location' : 'Finish Profile Setup'}</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={handleSignOut}>
+            <Text style={styles.secondaryButtonText}>Sign out</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -69,7 +108,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0E0F0F",
+    backgroundColor: Colors.background,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
@@ -79,15 +118,19 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0E0F0F",
+    backgroundColor: Colors.background,
+  },
+  formContainer: {
+    width: "60%",
+    alignItems: "center",
   },
   title: {
     fontSize: 24,
-    color: "#fff",
+    color: Colors.primaryWhite,
     fontWeight: "700",
   },
   subtitle: {
-    color: "#A5A6AB",
+    color: Colors.secondaryGray,
     fontSize: 16,
   },
   actions: {
@@ -95,24 +138,29 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   primaryButton: {
-    backgroundColor: "#F97316",
+    backgroundColor: Colors.action,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
   },
   primaryButtonText: {
-    color: "#0F0E12",
+    color: Colors.secondaryBackground,
     fontWeight: "700",
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: "#2B2C33",
+    borderColor: Colors.contentBorder,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
   },
   secondaryButtonText: {
-    color: "#fff",
+    color: Colors.primaryWhite,
     fontWeight: "600",
+  },
+  logo: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
   },
 });

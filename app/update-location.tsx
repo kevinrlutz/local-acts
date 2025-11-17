@@ -2,32 +2,32 @@ import { Href, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { auth } from "@/src/lib/firebase";
 import { geocodeLocation, LocationMode, MissingMapboxTokenError } from "@/src/services/mapbox";
 import { saveCompletedProfile, UserLocationPayload } from "@/src/services/userProfile";
 
-import Colors from '../../src/Colors';
+import Colors from '../src/Colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isMobile = screenWidth < 768;
 
 const SIGN_UP_ROUTE = "/(auth)/sign-up" as Href;
 
-export default function AccountSetupScreen() {
+export default function UpdateLocationScreen() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [isCheckingUser, setIsCheckingUser] = useState(!auth.currentUser);
@@ -139,24 +139,11 @@ export default function AccountSetupScreen() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>Tell us about you</Text>
+            <Text style={styles.title}>Update discovery location</Text>
             <Text style={styles.subtitle}>
               We use this information to personalise your Local Acts experience.
             </Text>
           </View>
-
-          {!auth.currentUser?.displayName && (
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Display name</Text>
-                <TextInput
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder="Add a stage or profile name"
-                placeholderTextColor={Colors.primaryWhite}
-                style={styles.input}
-                />
-            </View>
-          )}
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Location preference</Text>
@@ -234,7 +221,7 @@ export default function AccountSetupScreen() {
             {isSubmitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryButtonText}>Finish setup</Text>
+              <Text style={styles.primaryButtonText}>Update location</Text>
             )}
           </Pressable>
           </View>
@@ -259,6 +246,7 @@ const styles = StyleSheet.create({
     gap: 18,
     width: "100%",
     alignItems: "center",
+    justifyContent: isMobile ? "center" : "flex-start",
   },
   header: { gap: 6 },
   title: {
