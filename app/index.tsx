@@ -23,6 +23,10 @@ export default function Index() {
   const [userProfile, setUserProfile] = useState<AppUser | null>(null);
 
   useEffect(() => {
+    document.title = "Local Acts";
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setCheckingAuth(false);

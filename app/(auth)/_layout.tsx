@@ -22,7 +22,6 @@ export default function AuthLayout() {
         name="sign-up"
         options={{
           title: "Create account",
-          headerShown: false,
         }}
       />
       <Stack.Screen

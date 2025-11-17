@@ -40,6 +40,14 @@ export default function AccountSetupScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = "Account Setup";
+
+    return () => {
+        document.title = "Local Acts";
+    };
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setIsCheckingUser(false);

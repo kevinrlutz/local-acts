@@ -1,6 +1,6 @@
 import { Href, useRouter } from 'expo-router'
 import { signInWithEmailAndPassword } from 'firebase/auth'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
@@ -33,6 +33,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    document.title = "Login - Local Acts";
+  }, []);
 
   const showError = (message: string) => {
     setError(message)
