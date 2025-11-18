@@ -106,6 +106,20 @@ export default function Index() {
     }
   }, [user]);
 
+  const fetchProfile = useCallback(async () => {
+    if (!user) {
+      setUserProfile(null);
+      return;
+    }
+    try {
+      const profile = await getAppUserFromFirestore(user.uid);
+      setUserProfile(profile);
+    } catch (error) {
+      console.error("Failed to fetch user profile:", error);
+      // Optionally, set a default or handle error
+    }
+  }, [user]);
+
   const fetchActs = useCallback(async () => {
     if (!user) {
       setActs([]);
@@ -131,7 +145,8 @@ export default function Index() {
   useFocusEffect(
     useCallback(() => {
       fetchActs();
-    }, [fetchActs])
+      fetchProfile();
+    }, [fetchActs, fetchProfile])
   );
 
   useEffect(() => {
