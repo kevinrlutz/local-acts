@@ -1,123 +1,88 @@
-# LocalActs (Expo + TypeScript starter)
+# Local Acts
 
-LocalActs is an Expo-managed (TypeScript) application that now ships with a complete Firebase authentication flow, Google OAuth via Expo AuthSession, role-based onboarding, and gated navigation for fan and artist experiences.
+A cross-platform mobile and web application that connects local talent and their fans. Discover musicians, bands, and comedians in your area, follow your favorites, and never miss a local show.
 
-## Current onboarding flow
+## ✨ Features
 
-- `app/(auth)/sign-up.tsx` handles email/password account creation alongside Google OAuth using the Firebase JS SDK.
-- `app/(auth)/account-setup.tsx` collects the user's display name plus either a zip code or city/state combination, geocodes it through Mapbox, and persists the coordinates to Firestore.
-- `src/lib/firebase.ts` centralises the Firebase bootstrap (including React Native persistence) so both screens share the same auth + database instances.
-- `src/services/mapbox.ts` and `src/services/userProfile.ts` wrap third-party calls to keep the screens lightweight.
+### For Fans
+- **Location-based discovery**: Find acts within a specified distance from your city or zip code
+- **Smart filtering**: Filter by category (Musician, Rapper, Comedian, Other) and explore nearby talent
+- **Act profiles**: View detailed profiles with photos, upcoming events, and social media links
+- **(Coming soon) Favorites**: Save your favorite acts and get notified about new events
+- **Cross-platform**: Works seamlessly on iOS, Android, and web
 
-## Required environment variables
+### For Artists
+- **Professional profiles**: Create comprehensive act profiles with photos and social links
+- **Location targeting**: Set your performance location to be discovered by local fans
+- **Social integration**: Connect Spotify, Apple Music, and Instagram profiles
+- **(Coming soon) Event management**: Share upcoming shows and performances
 
-These values must be surfaced through `app.config.js` (or EAS secrets) using the Expo `EXPO_PUBLIC_` prefix so they are available at runtime:
+## 🛠️ Tech Stack
 
-| Variable | Purpose |
-| --- | --- |
-| `EXPO_PUBLIC_FIREBASE_API_KEY` | Firebase web API key |
-| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
-| `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project id |
-| `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
-| `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase sender id |
-| `EXPO_PUBLIC_FIREBASE_APP_ID` | Firebase app id |
-| `EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID` | (Optional) Firebase measurement id |
-| `EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID` | Google OAuth client for Expo Go |
-| `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` | Google OAuth client for Android dev builds |
-| `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | Google OAuth client for iOS dev builds |
-| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google OAuth client for web |
-| `EXPO_PUBLIC_MAPBOX_TOKEN` | Mapbox geocoding access token |
+- **Frontend**: React Native with Expo for cross-platform development
+- **Authentication**: Firebase Authentication with email/password
+- **Database**: Cloud Firestore for real-time data storage
+- **Location Services**: Mapbox Geocoding API for address resolution
 
-Without these variables the signup and account setup screens will block submission with descriptive errors so issues are caught before production.
+## 🚀 Getting Started
 
-## Firebase & OAuth configuration
+### Prerequisites
+- Node.js (v18 or later)
+- npm or yarn
+- Expo CLI (`npm install -g @expo/cli`)
 
-1. Provide your Firebase web credentials via environment variables consumed by `app.config.js` (see `EXPO_PUBLIC_*` table above).
-2. Configure Google OAuth client IDs for Expo AuthSession (again using the `EXPO_PUBLIC_GOOGLE_*` variables listed above).
-3. Supply `EXPO_PUBLIC_MAPBOX_TOKEN` for the account-setup geocoder before shipping.
-3. `src/firebase/config.ts` validates all Firebase values at runtime; missing keys will throw with guidance.
-4. `src/firebase/init.ts` initialises the modular SDK, using AsyncStorage-backed persistence so auth survives restarts in the managed workflow.
+### Installation
 
-## Auth module structure
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/kevinrlutz/local-acts.git
+   cd local-acts
+   ```
 
-```
-src/
-  auth/
-    AuthGate.tsx               // listens for auth state, fetches Firestore profile, drives routing
-    errors.ts                  // Firebase error → user-friendly message mapping
-    screens/
-      LoginScreen.tsx          // email/password login + Google AuthSession sign-in
-      SignupScreen.tsx         // account creation with name capture
-      ResetPasswordScreen.tsx  // password reset via email
-      RoleSelectScreen.tsx     // fan vs artist selection + Firestore profile write
-  firebase/
-    config.ts                  // centralised Firebase config sourced from app.config.js extras
-    init.ts                    // lazy accessors for app/auth/firestore instances
-  providers/
-    Providers.tsx              // SafeArea + React Query + Firebase bootstrap wrapper
-  store/
-    useAuthStore.ts            // Zustand store for auth status, user payload, and sign-out helper
-  types/
-    auth.ts                    // shared UserRole, AppUser, and AuthStatus types
-app/
-  _layout.tsx                  // wraps router with Providers + AuthGate
-  (auth)/                      // login, signup, reset-password screens
-  (role)/role-select.tsx       // role onboarding
-  (fan)/fan/...                // fan stack (discover, favorites)
-  (artist)/artist/...          // artist stack (profile, shows)
-```
-
-## Firestore document shape
-
-Role metadata is persisted to `users/{uid}` when the role is chosen:
-
-```json
-{
-  "displayName": "User supplied name",
-  "role": "fan" | "artist",
-  "createdAt": serverTimestamp(),
-  "updatedAt": serverTimestamp()
-}
-```
-
-Extend this document with additional fan/artist profile fields as you expand LocalActs.
-
-## Manual test checklist
-
-1. **Signup** – create a new email/password account, confirm the role selector appears, choose a role, and verify navigation to the correct stack. Relaunch to confirm persistence.
-2. **Email login** – sign in with an existing user whose role is already set and ensure you are routed to the proper stack automatically.
-3. **Password reset** – request a reset email and confirm the confirmation message appears and the email arrives.
-4. **Google sign-in** – after configuring OAuth IDs, authenticate with Google and ensure Firebase logs you in and routing follows the stored role.
-5. **Role enforcement** – delete the `role` field for a user in Firestore and relaunch; you should be taken back to the RoleSelect screen until a role is saved.
-6. **Logout** – sign out from both fan and artist flows; you should land on the login screen with state cleared.
-
-Run `npm install` after updating environment values so the project picks up `firebase`, `expo-auth-session`, `@tanstack/react-query`, `zustand`, and other dependencies.
-
-### Important note about env handling
-
-Do **not** import `dotenv` in client-side Expo code (anything under `app/` or bundled by Metro). `dotenv` pulls in Node-only modules and will crash the app. Use `app.config.js` (already configured) or EAS secrets instead.
-
-## Getting started
-
-1. Install dependencies:
-
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. Start the Expo development server:
-
+3. **Start the development server**
    ```bash
-   npx expo start
+   npm start
    ```
 
-3. Scan the QR code with Expo Go, run on an emulator, or use a development build as needed.
+4. **Run on your preferred platform**
+   - **Web**: Press `w` in the terminal or `npm run web`
+   - **iOS**: Press `i` or `npm run ios` (macOS with Xcode required)
+   - **Android**: Press `a` or `npm run android` (Android Studio required)
 
-The project uses Expo Router, so screens are organised by file structure in the `app/` directory. When you are ready for a fresh scaffold run `npm run reset-project` to archive the example screens.
+## 🏗️ Development
 
-## Learn more
+### Project Structure
+```
+local-acts/
+├── app/                    # Expo Router app directory
+│   ├── _layout.tsx        # Root layout
+│   ├── index.tsx          # Home screen
+│   ├── (auth)/            # Authentication screens
+│   └── act/               # Act-related screens
+├── src/
+│   ├── lib/               # Core libraries (Firebase config)
+│   ├── services/          # Business logic (API calls, data processing)
+│   └── types/             # TypeScript type definitions
+└── assets/                 # Static assets (images, icons)
+```
 
-- [Expo documentation](https://docs.expo.dev/)
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/)
-- [Firebase for Web v9](https://firebase.google.com/docs/web/modular-upgrade)
+### Key Development Features
 
+- **TypeScript Integration**: Comprehensive type safety with custom interfaces for user profiles, act data, and API responses
+- **Modular Architecture**: Clean separation of concerns with dedicated service layers for Firebase operations, location services, and data validation
+- **Responsive Design**: Adaptive layouts that work across different screen sizes and orientations
+- **Error Handling**: Robust error boundaries and user-friendly error messages
+- **Performance Optimization**: Efficient data fetching with caching and background updates
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
