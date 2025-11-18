@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { Href, useRouter } from "expo-router";
+import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
@@ -106,36 +106,33 @@ export default function Index() {
     }
   }, [user]);
 
-  useEffect(() => {
+  const fetchActs = useCallback(async () => {
     if (!user) {
       setActs([]);
       return;
     }
-    let canceled = false;
-    const fetchActs = async () => {
-      setActsLoading(true);
-      setActsError(null);
-      try {
-        const allActs = await getAllActs();
-        if (!canceled) {
-          setActs(allActs);
-        }
-      } catch (error) {
-        console.error("Failed to fetch acts:", error);
-        if (!canceled) {
-          setActsError("Unable to load acts right now.");
-        }
-      } finally {
-        if (!canceled) {
-          setActsLoading(false);
-        }
-      }
-    };
-    fetchActs();
-    return () => {
-      canceled = true;
-    };
+    setActsLoading(true);
+    setActsError(null);
+    try {
+      const allActs = await getAllActs();
+      setActs(allActs);
+    } catch (error) {
+      console.error("Failed to fetch acts:", error);
+      setActsError("Unable to load acts right now.");
+    } finally {
+      setActsLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    fetchActs();
+  }, [fetchActs]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchActs();
+    }, [fetchActs])
+  );
 
   useEffect(() => {
     if (acts.length === 0) {

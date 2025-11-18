@@ -49,7 +49,7 @@ export const geocodeLocation = async (
   const query = buildQuery(input);
   const token = assertToken();
   const encodedQuery = encodeURIComponent(query);
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?autocomplete=true&limit=1&access_token=${token}`;
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?autocomplete=true&limit=1&access_token=${token}&country=us`;
 
   const response = await fetch(url);
   if (!response.ok) {

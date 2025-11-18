@@ -1,6 +1,7 @@
-import { collection, doc, DocumentData, getDoc, getDocs, serverTimestamp, setDoc, Timestamp } from "firebase/firestore";
+import { collection, deleteDoc, doc, DocumentData, getDoc, getDocs, serverTimestamp, setDoc, Timestamp } from "firebase/firestore";
 
 import { db } from "@/src/lib/firebase";
+import type { UserLocationPayload } from "@/src/services/userProfile";
 import type { ActProfile, ActSocialLinks, CreateActProfilePayload } from "@/src/types/acts";
 
 const sanitizeLinks = (links?: ActSocialLinks) => {
@@ -84,4 +85,50 @@ export const getActProfileById = async (actUid: string): Promise<ActProfile> => 
   }
 
   return mapActSnapshot(actSnap.id, actSnap.data());
+};
+
+export const updateActProfile = async ({
+  actId,
+  name,
+  category,
+  profileImageRef,
+  links,
+  location,
+}: {
+  actId: string;
+  name: string;
+  category: ActProfile["category"];
+  profileImageRef: string;
+  links?: ActSocialLinks;
+  location: UserLocationPayload;
+}) => {
+  // Sanitize the location object to remove undefined fields
+  const cleanLocation = Object.fromEntries(
+    Object.entries(location).filter(([_, value]) => value !== undefined)
+  );
+
+  const payload: Record<string, unknown> = {
+    name,
+    category,
+    profileImageRef,
+    location: cleanLocation,
+    updatedAt: serverTimestamp(),
+  };
+
+  const sanitizedLinks = sanitizeLinks(links);
+  if (sanitizedLinks) {
+    payload.links = sanitizedLinks;
+  }
+
+  await setDoc(doc(db, "acts", actId), payload, { merge: true });
+
+  return actId;
+};
+
+export const deleteActProfile = async (actId: string) => {
+  await deleteDoc(doc(db, "acts", actId));
+
+  // Remove hasActProfile flag from user document
+  const userDocRef = doc(db, "users", actId);
+  await setDoc(userDocRef, { hasActProfile: false }, { merge: true });
 };

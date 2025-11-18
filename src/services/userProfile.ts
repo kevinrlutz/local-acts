@@ -25,11 +25,16 @@ export const saveCompletedProfile = async ({
   const docSnap = await getDoc(userDocRef);
   const isNew = !docSnap.exists();
 
+  // Sanitize the location object to remove undefined fields
+  const cleanLocation = Object.fromEntries(
+    Object.entries(location).filter(([_, value]) => value !== undefined)
+  );
+
   await setDoc(
     userDocRef,
     {
       displayName,
-      location,
+      location: cleanLocation,
       profileCompleted: true,
       updatedAt: serverTimestamp(),
       ...(isNew && { createdAt: serverTimestamp() }),

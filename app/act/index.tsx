@@ -20,7 +20,7 @@ import { getActProfileById } from "@/src/services/acts";
 import type { ActProfile } from "@/src/types/acts";
 import { getDownloadURL, ref } from "firebase/storage";
 
-const CREATE_ACT_ROUTE = "/act/create-act" as Href;
+const EDIT_ACT_ROUTE = "/act/edit-act" as Href;
 
 const SOCIAL_LINK_LABELS: Partial<Record<keyof NonNullable<ActProfile["links"]>, string>> = {
   spotify: "Spotify",
@@ -134,7 +134,7 @@ export default function ActProfileScreen() {
     }
   };
 
-  const handleEditPress = () => router.push(CREATE_ACT_ROUTE);
+  const handleEditPress = () => router.push((`${EDIT_ACT_ROUTE}?uid=${encodeURIComponent(actProfile!.id)}`) as Href);
 
   if (isLoading || isCheckingAuth) {
     return (
