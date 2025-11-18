@@ -2,7 +2,12 @@
   "name": "local-acts",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
+    "build-web": "npx expo export -p web",
+    "serve-web": "npx serve dist",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
