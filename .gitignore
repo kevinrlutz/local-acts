@@ -39,7 +39,10 @@ process.env
 *.tsbuildinfo
 
 app-example
+.vscode
+AGENTS.md
 
 # generated native folders
 /ios
 /android
+/dist
