@@ -49,7 +49,7 @@ const SOCIAL_LINK_FIELDS: Record<keyof ActSocialLinks, { label: string; placehol
 
 type SocialLinkKey = keyof ActSocialLinks;
 
-const validateSocialLinks = (linkValues: Record<SocialLinkKey, string>): ActSocialLinks | undefined => {
+const validateSocialLinks = (linkValues: Record<SocialLinkKey, string>): ActSocialLinks => {
   const normalized: ActSocialLinks = {};
   (Object.entries(linkValues) as [SocialLinkKey, string][]).forEach(([key, value]) => {
     const trimmed = value.trim();
@@ -63,7 +63,7 @@ const validateSocialLinks = (linkValues: Record<SocialLinkKey, string>): ActSoci
     normalized[key] = trimmed;
   });
 
-  return Object.keys(normalized).length ? normalized : undefined;
+  return normalized;  // Always return the object, even if empty
 };
 
 export default function EditActScreen() {
@@ -252,7 +252,7 @@ export default function EditActScreen() {
       return;
     }
 
-    let normalizedLinks: ActSocialLinks | undefined;
+    let normalizedLinks: ActSocialLinks;
     try {
       normalizedLinks = validateSocialLinks(links);
     } catch (validationError) {
