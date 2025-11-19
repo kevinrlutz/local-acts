@@ -2,7 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getDownloadURL, ref } from "firebase/storage";
 import { auth, storage } from "../src/lib/firebase";
@@ -319,7 +320,7 @@ export default function Index() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={Platform.OS === 'web' ? ['top', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}>
       <FlatList
         data={paginatedActs}
         keyExtractor={(item) => item.id}
@@ -468,7 +469,7 @@ export default function Index() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -478,8 +479,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 64,
   },
   headerContainer: {
     alignItems: "center",
