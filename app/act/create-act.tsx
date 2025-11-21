@@ -27,7 +27,7 @@ import { ref, uploadBytes } from "firebase/storage";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACT_PROFILE_ROUTE = "/act" as Href;
-const CATEGORY_OPTIONS: ActCategory[] = ["Musician", "Rapper", "Comedian", "Other"];
+const CATEGORY_OPTIONS: ActCategory[] = ["Musician", "Comedian", "Other"];
 const SOCIAL_LINK_FIELDS: Record<keyof ActSocialLinks, { label: string; placeholder: string; pattern: RegExp }> = {
   spotify: {
     label: "Spotify",
