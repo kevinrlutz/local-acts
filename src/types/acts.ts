@@ -1,6 +1,6 @@
 import type { UserLocationPayload } from "@/src/services/userProfile";
 
-export type ActCategory = "Musician" | "Rapper" | "Comedian" | "Other";
+export type ActCategory = "Musician" | "Comedian" | "Other";
 
 export type ActSocialLinks = {
   spotify?: string;

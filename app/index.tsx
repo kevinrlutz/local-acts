@@ -21,7 +21,7 @@ const CREATE_ACT_ROUTE = "/act/create-act" as Href;
 const ACT_PROFILE_ROUTE = "/act" as Href;
 const PAGE_SIZE = 10;
 const DISTANCE_OPTIONS = [10, 25, 50, 100];
-const CATEGORY_OPTIONS: ("All" | ActCategory)[] = ["All", "Musician", "Rapper", "Comedian", "Other"];
+const CATEGORY_OPTIONS: ("All" | ActCategory)[] = ["All", "Musician", "Comedian", "Other"];
 
 const { width: screenWidth } = Dimensions.get('window');
 const isMobile = screenWidth < 768;
@@ -553,6 +553,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   menuButton: {
+    marginTop: 8,
     padding: 12,
     borderRadius: 999,
     borderWidth: 1,

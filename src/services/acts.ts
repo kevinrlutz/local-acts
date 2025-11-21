@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, DocumentData, getDoc, getDocs, serverTimestamp, setDoc, Timestamp } from "firebase/firestore";
+import { collection, deleteDoc, deleteField, doc, DocumentData, getDoc, getDocs, serverTimestamp, setDoc, Timestamp } from "firebase/firestore";
 
 import { db } from "@/src/lib/firebase";
 import type { UserLocationPayload } from "@/src/services/userProfile";
@@ -9,8 +9,7 @@ const sanitizeLinks = (links?: ActSocialLinks) => {
     return undefined;
   }
   const entries = Object.entries(links)
-    .map(([key, value]) => [key, value?.trim() ?? ""] as const)
-    .filter(([, value]) => Boolean(value));
+    .map(([key, value]) => [key, value?.trim() ?? ""] as const);
   if (!entries.length) {
     return undefined;
   }
@@ -116,6 +115,16 @@ export const updateActProfile = async ({
   };
 
   const sanitizedLinks = sanitizeLinks(links);
+
+  if (sanitizedLinks) {
+    Object.keys(sanitizedLinks).forEach((key) => {
+      const value = sanitizedLinks[key as keyof ActSocialLinks];
+      if (value === "" || value === undefined) {
+        sanitizedLinks[key as keyof ActSocialLinks] = deleteField() as any;
+      }
+    });
+  }
+
   if (sanitizedLinks) {
     payload.links = sanitizedLinks;
   }

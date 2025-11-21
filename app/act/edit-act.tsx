@@ -28,7 +28,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACT_PROFILE_ROUTE = "/act" as Href;
 const HOME_PAGE_ROUTE = "/" as Href;
-const CATEGORY_OPTIONS: ActCategory[] = ["Musician", "Rapper", "Comedian", "Other"];
+const CATEGORY_OPTIONS: ActCategory[] = ["Musician", "Comedian", "Other"];
 const SOCIAL_LINK_FIELDS: Record<keyof ActSocialLinks, { label: string; placeholder: string; pattern: RegExp }> = {
   spotify: {
     label: "Spotify",
@@ -53,14 +53,15 @@ const validateSocialLinks = (linkValues: Record<SocialLinkKey, string>): ActSoci
   const normalized: ActSocialLinks = {};
   (Object.entries(linkValues) as [SocialLinkKey, string][]).forEach(([key, value]) => {
     const trimmed = value.trim();
-    if (!trimmed) {
-      return;
+    if (!trimmed || trimmed.length === 0 || typeof trimmed === "undefined") {
+      normalized[key] = "";  // Set empty strings for empty inputs
+    } else {
+      const { pattern, label } = SOCIAL_LINK_FIELDS[key];
+      if (!pattern.test(trimmed)) {
+        throw new Error(`Enter a valid ${label} link.`);
+      }
+      normalized[key] = trimmed;
     }
-    const { pattern, label } = SOCIAL_LINK_FIELDS[key];
-    if (!pattern.test(trimmed)) {
-      throw new Error(`Enter a valid ${label} link.`);
-    }
-    normalized[key] = trimmed;
   });
 
   return normalized;  // Always return the object, even if empty

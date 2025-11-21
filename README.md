@@ -6,7 +6,7 @@ A cross-platform mobile and web application that connects local talent and their
 
 ### For Fans
 - **Location-based discovery**: Find acts within a specified distance from your city or zip code
-- **Smart filtering**: Filter by category (Musician, Rapper, Comedian, Other) and explore nearby talent
+- **Smart filtering**: Filter by category (Musician, Comedian, Other) and explore nearby talent
 - **Act profiles**: View detailed profiles with photos, upcoming events, and social media links
 - **(Coming soon) Favorites**: Save your favorite acts and get notified about new events
 - **Cross-platform**: Works seamlessly on iOS, Android, and web
