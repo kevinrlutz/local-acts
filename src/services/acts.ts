@@ -16,6 +16,16 @@ const sanitizeLinks = (links?: ActSocialLinks) => {
   return Object.fromEntries(entries) as ActSocialLinks;
 };
 
+const DESCRIPTION_MAX_LENGTH = 250;
+
+const normalizeDescription = (description?: string | null) => {
+  const trimmed = description?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return trimmed.length > DESCRIPTION_MAX_LENGTH ? trimmed.slice(0, DESCRIPTION_MAX_LENGTH) : trimmed;
+};
+
 // ...existing code...
 
 const toDateOrNull = (value: unknown) => (value instanceof Timestamp ? value.toDate() : null);
@@ -26,6 +36,7 @@ const mapActSnapshot = (id: string, data: DocumentData): ActProfile => ({
   name: data.name as string,
   category: data.category as ActProfile["category"],
   profileImageRef: data.profileImageRef as string,
+  description: (data.description as string | undefined) ?? null,
   links: (data.links as ActSocialLinks | undefined) ?? null,
   location: data.location as ActProfile["location"],
   createdAt: toDateOrNull(data.createdAt),
@@ -42,6 +53,7 @@ export const createActProfile = async ({
   name,
   category,
   profileImageRef,
+  description,
   links,
   location,
 }: CreateActProfilePayload) => {
@@ -59,6 +71,11 @@ export const createActProfile = async ({
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+
+  const normalizedDescription = normalizeDescription(description);
+  if (normalizedDescription) {
+    payload.description = normalizedDescription;
+  }
 
   const sanitizedLinks = sanitizeLinks(links);
   if (sanitizedLinks) {
@@ -91,6 +108,7 @@ export const updateActProfile = async ({
   name,
   category,
   profileImageRef,
+  description,
   links,
   location,
 }: {
@@ -98,6 +116,7 @@ export const updateActProfile = async ({
   name: string;
   category: ActProfile["category"];
   profileImageRef: string;
+  description?: string | null;
   links?: ActSocialLinks;
   location: UserLocationPayload;
 }) => {
@@ -114,6 +133,11 @@ export const updateActProfile = async ({
     updatedAt: serverTimestamp(),
   };
 
+  if (description !== undefined) {
+    const normalizedDescription = normalizeDescription(description);
+    payload.description = normalizedDescription ?? deleteField();
+  }
+
   const sanitizedLinks = sanitizeLinks(links);
 
   if (sanitizedLinks) {
@@ -123,9 +147,7 @@ export const updateActProfile = async ({
         sanitizedLinks[key as keyof ActSocialLinks] = deleteField() as any;
       }
     });
-  }
 
-  if (sanitizedLinks) {
     payload.links = sanitizedLinks;
   }
 

@@ -29,6 +29,7 @@ const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACT_PROFILE_ROUTE = "/act" as Href;
 const HOME_PAGE_ROUTE = "/" as Href;
 const CATEGORY_OPTIONS: ActCategory[] = ["Musician", "Comedian", "Other"];
+const DESCRIPTION_MAX_LENGTH = 250;
 const SOCIAL_LINK_FIELDS: Record<keyof ActSocialLinks, { label: string; placeholder: string; pattern: RegExp }> = {
   spotify: {
     label: "Spotify",
@@ -53,7 +54,7 @@ const validateSocialLinks = (linkValues: Record<SocialLinkKey, string>): ActSoci
   const normalized: ActSocialLinks = {};
   (Object.entries(linkValues) as [SocialLinkKey, string][]).forEach(([key, value]) => {
     const trimmed = value.trim();
-    if (!trimmed || trimmed.length === 0 || typeof trimmed === "undefined") {
+    if (!trimmed) {
       normalized[key] = "";  // Set empty strings for empty inputs
     } else {
       const { pattern, label } = SOCIAL_LINK_FIELDS[key];
@@ -75,6 +76,7 @@ export default function EditActScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [actProfile, setActProfile] = useState<ActProfile | null>(null);
   const [actName, setActName] = useState("");
+  const [description, setDescription] = useState("");
   const [category, setCategory] = useState<ActCategory>("Musician");
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [hasImageChanged, setHasImageChanged] = useState(false);
@@ -130,6 +132,7 @@ export default function EditActScreen() {
 
         setActProfile(profile);
         setActName(profile.name);
+        setDescription(profile.description ?? "");
         setCategory(profile.category);
         
         // Load profile image from Firebase Storage
@@ -253,6 +256,12 @@ export default function EditActScreen() {
       return;
     }
 
+    const trimmedDescription = description.trim();
+    if (trimmedDescription.length > DESCRIPTION_MAX_LENGTH) {
+      setError(`Act description must be ${DESCRIPTION_MAX_LENGTH} characters or fewer.`);
+      return;
+    }
+
     let normalizedLinks: ActSocialLinks;
     try {
       normalizedLinks = validateSocialLinks(links);
@@ -292,6 +301,7 @@ export default function EditActScreen() {
         name: trimmedActName,
         category,
         profileImageRef,
+        description: trimmedDescription || undefined,
         links: normalizedLinks,
         location: locationPayload,
       });
@@ -433,6 +443,23 @@ export default function EditActScreen() {
                   </Pressable>
                 ))}
               </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Description (optional)</Text>
+              <Text style={styles.helperText}>Share a short bio or highlights (max {DESCRIPTION_MAX_LENGTH} characters).</Text>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Describe your act for fans."
+                placeholderTextColor={Colors.secondaryGray}
+                style={[styles.input, styles.textArea]}
+                multiline
+                numberOfLines={4}
+                maxLength={DESCRIPTION_MAX_LENGTH}
+                textAlignVertical="top"
+              />
+              <Text style={styles.charCount}>{description.length}/{DESCRIPTION_MAX_LENGTH}</Text>
             </View>
 
             <View style={styles.formGroup}>
@@ -620,6 +647,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: Colors.secondaryBackground,
     color: Colors.primaryWhite,
+  },
+  textArea: {
+    minHeight: 120,
+  },
+  charCount: {
+    alignSelf: "flex-end",
+    color: Colors.secondaryGray,
+    fontSize: 12,
   },
   modeRow: {
     flexDirection: "row",
