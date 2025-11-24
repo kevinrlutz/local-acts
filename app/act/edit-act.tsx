@@ -301,7 +301,7 @@ export default function EditActScreen() {
         name: trimmedActName,
         category,
         profileImageRef,
-        description: trimmedDescription,
+        description: trimmedDescription || undefined,
         links: normalizedLinks,
         location: locationPayload,
       });
