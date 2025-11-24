@@ -14,6 +14,7 @@ export type ActProfile = {
   name: string;
   category: ActCategory;
   profileImageRef: string;
+  description?: string | null;
   links?: ActSocialLinks | null;
   location: UserLocationPayload;
   createdAt?: Date | null;
@@ -25,6 +26,7 @@ export type CreateActProfilePayload = {
   name: string;
   category: ActCategory;
   profileImageRef: string;
+  description?: string | null;
   links?: ActSocialLinks;
   location: UserLocationPayload;
 };

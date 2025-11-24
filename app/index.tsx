@@ -22,6 +22,7 @@ const ACT_PROFILE_ROUTE = "/act" as Href;
 const PAGE_SIZE = 10;
 const DISTANCE_OPTIONS = [10, 25, 50, 100];
 const CATEGORY_OPTIONS: ("All" | ActCategory)[] = ["All", "Musician", "Comedian", "Other"];
+const DESCRIPTION_PREVIEW_MAX_LENGTH = 60;
 
 const { width: screenWidth } = Dimensions.get('window');
 const isMobile = screenWidth < 768;
@@ -57,6 +58,20 @@ const formatActLocation = (act: ActProfile) => {
     return `${city}, ${state}`;
   }
   return act.location?.formattedAddress ?? "Location unavailable";
+};
+
+const formatActDescriptionPreview = (description?: string | null) => {
+  if (!description) {
+    return null;
+  }
+  const trimmed = description.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.length <= DESCRIPTION_PREVIEW_MAX_LENGTH) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, DESCRIPTION_PREVIEW_MAX_LENGTH).trimEnd()}...`;
 };
 
 export default function Index() {
@@ -242,23 +257,29 @@ export default function Index() {
     }
   }, [currentPage, totalPages]);
 
-  const renderActItem = useCallback(({ item }: { item: ActWithDistance }) => (
-    <Pressable style={styles.actCard} onPress={() => router.push((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}`) as Href)}>
-      <Image
-        source={actImageUrls[item.id] ? { uri: actImageUrls[item.id] } : require('@/assets/images/icon.png')}
-        style={styles.actImage}
-        accessibilityLabel={`${item.name} profile photo`}
-      />
-      <View style={styles.actContent}>
-        <Text style={styles.actName}>{item.name}</Text>
-        <Text style={styles.actMeta}>{item.category}</Text>
-        <Text style={styles.actMeta}>{formatActLocation(item)}</Text>
-        {typeof item.distanceInMiles === "number" && (
-          <Text style={styles.actDistance}>{item.distanceInMiles.toFixed(1)} miles away</Text>
-        )}
-      </View>
-    </Pressable>
-  ), [actImageUrls, router]);
+  const renderActItem = useCallback(({ item }: { item: ActWithDistance }) => {
+    const descriptionPreview = formatActDescriptionPreview(item.description);
+    return (
+      <Pressable style={styles.actCard} onPress={() => router.push((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}`) as Href)}>
+        <Image
+          source={actImageUrls[item.id] ? { uri: actImageUrls[item.id] } : require('@/assets/images/icon.png')}
+          style={styles.actImage}
+          accessibilityLabel={`${item.name} profile photo`}
+        />
+        <View style={styles.actContent}>
+          <Text style={styles.actName}>{item.name}</Text>
+          <Text style={styles.actMeta}>{item.category}</Text>
+          <Text style={styles.actMeta}>{formatActLocation(item)}</Text>
+          {descriptionPreview ? (
+            <Text style={styles.actDescription}>{descriptionPreview}</Text>
+          ) : null}
+          {typeof item.distanceInMiles === "number" && (
+            <Text style={styles.actDistance}>{item.distanceInMiles.toFixed(1)} miles away</Text>
+          )}
+        </View>
+      </Pressable>
+    );
+  }, [actImageUrls, router]);
 
   const renderEmptyActs = useCallback(() => (
     <View style={styles.emptyState}>
@@ -634,6 +655,10 @@ const styles = StyleSheet.create({
   },
   actMeta: {
     color: Colors.secondaryGray,
+  },
+  actDescription: {
+    color: Colors.primaryWhite,
+    fontSize: 13,
   },
   actDistance: {
     color: Colors.successGreen,

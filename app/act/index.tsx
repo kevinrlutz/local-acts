@@ -2,15 +2,15 @@ import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Linking,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -159,6 +159,13 @@ export default function ActProfileScreen() {
           <Image source={{ uri: imageUrl }} style={styles.heroImage} />
           <Text style={styles.actName}>{actProfile.name}</Text>
           <Text style={styles.category}>{actProfile.category}</Text>
+
+          {actProfile.description ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>About</Text>
+              <Text style={styles.sectionText}>{actProfile.description}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Location</Text>
