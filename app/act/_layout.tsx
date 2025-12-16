@@ -15,6 +15,24 @@ export default function ActLayout() {
                 }}
             />
             <Stack.Screen
+                name="create-event"
+                options={{
+                    title: "Add Event",
+                }}
+            />
+            <Stack.Screen
+                name="edit-event"
+                options={{
+                    title: "Edit Event",
+                }}
+            />
+            <Stack.Screen
+                name="edit-act"
+                options={{
+                    title: "Edit Act Profile",
+                }}
+            />
+            <Stack.Screen
                 name="[uid]"
                 options={{
                     title: "Act Profile",

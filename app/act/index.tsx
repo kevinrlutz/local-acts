@@ -2,25 +2,28 @@ import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Linking,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
 import { auth, storage } from "@/src/lib/firebase";
-import { getActProfileById } from "@/src/services/acts";
-import type { ActProfile } from "@/src/types/acts";
+import { deleteActEvent, getActEvents, getActProfileById } from "@/src/services/acts";
+import type { ActEvent, ActProfile } from "@/src/types/acts";
 import { getDownloadURL, ref } from "firebase/storage";
 
 const EDIT_ACT_ROUTE = "/act/edit-act" as Href;
+const CREATE_EVENT_ROUTE = "/act/create-event" as Href;
+const EDIT_EVENT_ROUTE = "/act/edit-event" as Href;
 
 const SOCIAL_LINK_LABELS: Partial<Record<keyof NonNullable<ActProfile["links"]>, string>> = {
   spotify: "Spotify",
@@ -50,6 +53,8 @@ export default function ActProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const [events, setEvents] = useState<ActEvent[] | null>(null);
+  const [isEventsLoading, setIsEventsLoading] = useState(true);
 
   const actUid = useMemo(() => {
     const rawUid = params.uid;
@@ -101,6 +106,34 @@ export default function ActProfileScreen() {
   }, [actUid]);
 
   useEffect(() => {
+    let isMounted = true;
+    const fetchEvents = async () => {
+      if (!actUid) {
+        setIsEventsLoading(false);
+        return;
+      }
+      try {
+        setIsEventsLoading(true);
+        const nextEvents = await getActEvents(actUid);
+        if (isMounted) {
+          setEvents(nextEvents);
+        }
+      } catch (err) {
+        console.log("Error loading act events", err);
+      } finally {
+        if (isMounted) {
+          setIsEventsLoading(false);
+        }
+      }
+    };
+
+    fetchEvents();
+    return () => {
+      isMounted = false;
+    };
+  }, [actUid]);
+
+  useEffect(() => {
     if (typeof document !== "undefined") {
       document.title = actProfile?.name ? `${actProfile.name} • Local Acts` : "Act Profile";
       return () => {
@@ -120,6 +153,47 @@ export default function ActProfileScreen() {
   }, [actProfile?.profileImageRef]);
 
   const isOwner = user && actProfile && user.uid === actProfile.ownerUid;
+
+  const formatEventDate = (date: Date, hasTime?: boolean) => {
+    const datePart = date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    if (!hasTime) {
+      return datePart;
+    }
+    const timePart = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `${datePart} • ${timePart}`;
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!actProfile || !isOwner) {
+      return;
+    }
+
+    const confirmed = typeof window !== "undefined"
+      ? window.confirm("Delete this event? This cannot be undone.")
+      : true;
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteActEvent(actProfile.id, eventId);
+      setEvents((prev) => prev?.filter((event) => event.id !== eventId) ?? []);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to delete event.";
+      Alert.alert("Delete error", message);
+    }
+  };
+
+  const handleAddEventPress = () => {
+    if (!actProfile) return;
+    router.push((`${CREATE_EVENT_ROUTE}?uid=${encodeURIComponent(actProfile.id)}`) as Href);
+  };
+
+  const handleEditEventPress = (eventId: string) => {
+    if (!actProfile) return;
+    router.push((`${EDIT_EVENT_ROUTE}?uid=${encodeURIComponent(actProfile.id)}&eventId=${encodeURIComponent(eventId)}`) as Href);
+  };
 
   const handleOpenLink = async (url: string) => {
     try {
@@ -153,7 +227,7 @@ export default function ActProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["right", "bottom", "left"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Image source={{ uri: imageUrl }} style={styles.heroImage} />
@@ -198,6 +272,60 @@ export default function ActProfileScreen() {
             </View>
           ) : null}
 
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Upcoming Events</Text>
+              {isOwner ? (
+                <Pressable style={styles.secondaryButton} onPress={handleAddEventPress}>
+                  <Text style={styles.secondaryButtonText}>Add Event</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {isEventsLoading ? (
+              <ActivityIndicator />
+            ) : events && events.length ? (
+              <View style={styles.eventList}>
+                {events.map((event) => (
+                  <View key={event.id} style={styles.eventCard}>
+                    <View style={styles.eventHeader}>
+                      <View style={styles.eventTitleGroup}>
+                        <Text style={styles.eventTitle}>{event.title}</Text>
+                        <Text style={styles.eventMeta}>{formatEventDate(event.eventDate, event.hasTime)}</Text>
+                      </View>
+                      {isOwner ? (
+                        <View style={styles.eventActions}>
+                          <Pressable style={styles.eventIconButton} onPress={() => handleEditEventPress(event.id)}>
+                            <Text style={styles.eventIconText}>✎</Text>
+                          </Pressable>
+                          <Pressable style={styles.eventIconButton} onPress={() => handleDeleteEvent(event.id)}>
+                            <Text style={styles.eventIconText}>×</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                    {event.description ? (
+                      <Text style={styles.sectionText}>{event.description}</Text>
+                    ) : null}
+                    {event.location ? (
+                      <Text style={styles.sectionSubtext}>{event.location}</Text>
+                    ) : null}
+                    {event.ticketLink ? (
+                      <Pressable
+                        style={styles.ticketButton}
+                        onPress={() => handleOpenLink(event.ticketLink!)}
+                      >
+                        <Text style={styles.ticketButtonText}>Get Tickets</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.sectionSubtext}>Check back for upcoming events</Text>
+            )}
+          </View>
+
           {isOwner && (
             <Pressable style={styles.editButton} onPress={handleEditPress}>
               <Text style={styles.editButtonText}>Edit Act Profile</Text>
@@ -216,7 +344,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    paddingTop: Platform.select({ ios: 12, android: 8, default: 24 }),
     alignItems: "center",
   },
   card: {
@@ -247,6 +377,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 8,
   },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   sectionTitle: {
     fontSize: 16,
     color: Colors.primaryWhite,
@@ -268,6 +403,81 @@ const styles = StyleSheet.create({
   },
   linkButtonText: {
     color: Colors.primaryWhite,
+    fontWeight: "700",
+  },
+  secondaryButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    backgroundColor: Colors.secondaryBackground,
+  },
+  secondaryButtonText: {
+    color: Colors.primaryWhite,
+    fontWeight: "700",
+  },
+  eventList: {
+    gap: 12,
+  },
+  eventCard: {
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: Colors.background,
+    gap: 6,
+  },
+  eventHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  eventActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  eventTitleGroup: {
+    gap: 2,
+    flex: 1,
+  },
+  eventTitle: {
+    color: Colors.primaryWhite,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  eventMeta: {
+    color: Colors.secondaryGray,
+    fontSize: 13,
+  },
+  eventIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.secondaryBackground,
+  },
+  eventIconText: {
+    color: Colors.primaryWhite,
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "700",
+  },
+  ticketButton: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.action,
+  },
+  ticketButtonText: {
+    color: Colors.secondaryBackground,
     fontWeight: "700",
   },
   editButton: {

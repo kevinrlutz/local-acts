@@ -21,6 +21,29 @@ export type ActProfile = {
   updatedAt?: Date | null;
 };
 
+export type ActEvent = {
+  id: string;
+  actId: string;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  ticketLink?: string | null;
+  eventDate: Date;
+  hasTime?: boolean;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+};
+
+export type CreateActEventPayload = {
+  title: string;
+  description?: string;
+  location?: string;
+  ticketLink?: string;
+  /** Combined date and optional time as a Date object. */
+  eventDate: Date;
+  hasTime?: boolean;
+};
+
 export type CreateActProfilePayload = {
   ownerUid: string;
   name: string;

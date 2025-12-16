@@ -1,8 +1,8 @@
-import { collection, deleteDoc, deleteField, doc, DocumentData, getDoc, getDocs, serverTimestamp, setDoc, Timestamp } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, deleteField, doc, DocumentData, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 
 import { db } from "@/src/lib/firebase";
 import type { UserLocationPayload } from "@/src/services/userProfile";
-import type { ActProfile, ActSocialLinks, CreateActProfilePayload } from "@/src/types/acts";
+import type { ActEvent, ActProfile, ActSocialLinks, CreateActEventPayload, CreateActProfilePayload } from "@/src/types/acts";
 
 const sanitizeLinks = (links?: ActSocialLinks) => {
   if (!links) {
@@ -29,6 +29,19 @@ const normalizeDescription = (description?: string | null) => {
 // ...existing code...
 
 const toDateOrNull = (value: unknown) => (value instanceof Timestamp ? value.toDate() : null);
+
+const mapEventSnapshot = (actId: string, eventId: string, data: DocumentData): ActEvent => ({
+  id: eventId,
+  actId,
+  title: data.title as string,
+  description: (data.description as string | undefined) ?? null,
+  location: (data.location as string | undefined) ?? null,
+  ticketLink: (data.ticketLink as string | undefined) ?? null,
+  eventDate: toDateOrNull(data.eventDate) ?? new Date(),
+  hasTime: Boolean(data.hasTime),
+  createdAt: toDateOrNull(data.createdAt),
+  updatedAt: toDateOrNull(data.updatedAt),
+});
 
 const mapActSnapshot = (id: string, data: DocumentData): ActProfile => ({
   id,
@@ -156,7 +169,100 @@ export const updateActProfile = async ({
   return actId;
 };
 
+export const getActEvents = async (actId: string): Promise<ActEvent[]> => {
+  const eventsQuery = query(
+    collection(doc(db, "acts", actId), "events"),
+    orderBy("eventDate", "asc")
+  );
+  const eventsSnapshot = await getDocs(eventsQuery);
+
+  return eventsSnapshot.docs.map((docSnap) => mapEventSnapshot(actId, docSnap.id, docSnap.data()));
+};
+
+export const getActEventById = async (actId: string, eventId: string): Promise<ActEvent> => {
+  const eventRef = doc(db, "acts", actId, "events", eventId);
+  const eventSnap = await getDoc(eventRef);
+  if (!eventSnap.exists()) {
+    throw new Error("Event not found.");
+  }
+  return mapEventSnapshot(actId, eventSnap.id, eventSnap.data());
+};
+
+export const createActEvent = async (actId: string, payload: CreateActEventPayload): Promise<string> => {
+  const { title, description, location, ticketLink, eventDate, hasTime } = payload;
+
+  const eventCollectionRef = collection(doc(db, "acts", actId), "events");
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    throw new Error("Event title is required.");
+  }
+
+  const eventPayload: Record<string, unknown> = {
+    title: trimmedTitle,
+    actId,
+    ownerUid: actId,
+    eventDate: Timestamp.fromDate(eventDate),
+    hasTime: Boolean(hasTime),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  const trimmedDescription = description?.trim();
+  if (trimmedDescription) {
+    eventPayload.description = trimmedDescription;
+  }
+
+  const trimmedLocation = location?.trim();
+  if (trimmedLocation) {
+    eventPayload.location = trimmedLocation;
+  }
+
+  const trimmedTicketLink = ticketLink?.trim();
+  if (trimmedTicketLink) {
+    eventPayload.ticketLink = trimmedTicketLink;
+  }
+
+  const docRef = await addDoc(eventCollectionRef, eventPayload);
+  return docRef.id;
+};
+
+export const updateActEvent = async (actId: string, eventId: string, payload: CreateActEventPayload) => {
+  const { title, description, location, ticketLink, eventDate, hasTime } = payload;
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    throw new Error("Event title is required.");
+  }
+
+  const eventRef = doc(db, "acts", actId, "events", eventId);
+  const updatePayload: Record<string, unknown> = {
+    title: trimmedTitle,
+    eventDate: Timestamp.fromDate(eventDate),
+    hasTime: Boolean(hasTime),
+    updatedAt: serverTimestamp(),
+  };
+
+  const trimmedDescription = description?.trim();
+  updatePayload.description = trimmedDescription ? trimmedDescription : deleteField();
+
+  const trimmedLocation = location?.trim();
+  updatePayload.location = trimmedLocation ? trimmedLocation : deleteField();
+
+  const trimmedTicketLink = ticketLink?.trim();
+  updatePayload.ticketLink = trimmedTicketLink ? trimmedTicketLink : deleteField();
+
+  await updateDoc(eventRef, updatePayload);
+};
+
+export const deleteActEvent = async (actId: string, eventId: string) => {
+  await deleteDoc(doc(db, "acts", actId, "events", eventId));
+};
+
 export const deleteActProfile = async (actId: string) => {
+  const eventsCollectionRef = collection(doc(db, "acts", actId), "events");
+  const eventsSnapshot = await getDocs(eventsCollectionRef);
+
+  await Promise.all(eventsSnapshot.docs.map((eventDoc) => deleteDoc(eventDoc.ref)));
+
   await deleteDoc(doc(db, "acts", actId));
 
   // Remove hasActProfile flag from user document
