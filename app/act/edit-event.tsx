@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
 import { auth } from "@/src/lib/firebase";
+import { parseEventDate, validateTicketUrl } from "@/src/lib/validationUtils";
 import { getActEventById, getActProfileById, updateActEvent } from "@/src/services/acts";
 import type { ActEvent, ActProfile } from "@/src/types/acts";
 
@@ -25,52 +26,6 @@ const ACT_PROFILE_ROUTE = "/act" as Href;
 
 const DATE_PLACEHOLDER = "YYYY-MM-DD";
 const TIME_PLACEHOLDER = "HH:MM";
-
-const parseEventDate = (dateInput: string, timeInput?: string) => {
-  const normalizedDate = dateInput.trim();
-  const [yearStr, monthStr, dayStr] = normalizedDate.split("-");
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
-
-  if (!year || !month || !day) {
-    throw new Error("Enter a valid event date (YYYY-MM-DD).");
-  }
-
-  if (month < 1 || month > 12) {
-    throw new Error("Month must be between 1 and 12.");
-  }
-
-  const daysInMonth = new Date(year, month, 0).getDate();
-  if (day < 1 || day > daysInMonth) {
-    throw new Error("Enter a valid day for the selected month.");
-  }
-
-  let hours = 12;
-  let minutes = 0;
-  let hasTime = false;
-
-  const normalizedTime = timeInput?.trim();
-  if (normalizedTime) {
-    const match = normalizedTime.match(/^(\d{1,2}):(\d{2})$/);
-    if (!match) {
-      throw new Error("Enter a valid time in HH:MM format.");
-    }
-    hours = Number(match[1]);
-    minutes = Number(match[2]);
-    if (hours > 23 || minutes > 59) {
-      throw new Error("Enter a valid time in HH:MM format.");
-    }
-    hasTime = true;
-  }
-
-  const eventDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-  if (Number.isNaN(eventDate.getTime())) {
-    throw new Error("Enter a valid event date.");
-  }
-
-  return { eventDate, hasTime } as const;
-};
 
 const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
 const formatTimeInput = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
@@ -182,6 +137,15 @@ export default function EditEventScreen() {
 
     const trimmedLocation = location.trim();
     const trimmedTicketLink = ticketLink.trim();
+    let validatedTicketLink: string | undefined;
+    try {
+      validatedTicketLink = validateTicketUrl(trimmedTicketLink);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Enter a valid ticket URL.";
+      setError(message);
+      Alert.alert("Invalid ticket link", message);
+      return;
+    }
     const trimmedDescription = description.trim();
 
     try {
@@ -191,7 +155,7 @@ export default function EditEventScreen() {
       await updateActEvent(actProfile.id, event.id, {
         title: trimmedTitle,
         location: trimmedLocation || undefined,
-        ticketLink: trimmedTicketLink || undefined,
+        ticketLink: validatedTicketLink,
         description: trimmedDescription || undefined,
         eventDate: parsedDate,
         hasTime,

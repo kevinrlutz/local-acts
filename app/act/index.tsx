@@ -163,14 +163,33 @@ export default function ActProfileScreen() {
     return `${datePart} • ${timePart}`;
   };
 
+  const confirmDeleteEvent = () =>
+    new Promise<boolean>((resolve) => {
+      const isWeb = Platform.OS === "web";
+      if (isWeb) {
+        const confirmed = typeof window !== "undefined"
+          ? window.confirm("Delete this event? This action cannot be undone.")
+          : false;
+        resolve(confirmed);
+        return;
+      }
+
+      Alert.alert(
+        "Delete Event",
+        "Are you sure you want to delete this event? This action cannot be undone.",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Delete", style: "destructive", onPress: () => resolve(true) },
+        ]
+      );
+    });
+
   const handleDeleteEvent = async (eventId: string) => {
     if (!actProfile || !isOwner) {
       return;
     }
 
-    const confirmed = typeof window !== "undefined"
-      ? window.confirm("Delete this event? This cannot be undone.")
-      : true;
+    const confirmed = await confirmDeleteEvent();
 
     if (!confirmed) {
       return;
