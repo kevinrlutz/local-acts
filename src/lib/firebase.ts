@@ -13,7 +13,7 @@ const app = initializeApp({
 });
 
 const auth = getAuth(app);
-const db = getFirestore(app, "local-acts1");
+const db = getFirestore(app, "local-acts");
 const storage = getStorage(app);
 export { auth, db, storage };
 
