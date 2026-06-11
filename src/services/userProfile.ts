@@ -3,7 +3,7 @@ import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "@/src/lib/firebase";
 import type { GeocodeLocationResult, LocationMode } from "@/src/services/mapbox";
-import { AppUser } from '../types/auth';
+import { AppUser } from "../types/auth";
 
 export type UserLocationPayload = GeocodeLocationResult & {
   rawInput: string;
@@ -59,3 +59,14 @@ export const getAppUserFromFirestore = async (
     }
 }
 
+export const updateStageLightsPreference = async (
+  uid: string,
+  enabled: boolean
+): Promise<void> => {
+  const userDocRef = doc(db, "users", uid)
+  await setDoc(
+    userDocRef,
+    { stageLightsEnabled: enabled, updatedAt: serverTimestamp() },
+    { merge: true }
+  )
+}
