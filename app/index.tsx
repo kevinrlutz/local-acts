@@ -112,7 +112,7 @@ export default function Index() {
   )
   const [currentPage, setCurrentPage] = useState(1)
   const [isMenuVisible, setIsMenuVisible] = useState(false)
-  const [stageLightsEnabled, setStageLightsEnabled] = useState(true)
+  const [stageLightsEnabled, setStageLightsEnabled] = useState(false)
   const stageLightsInitialized = useRef(false)
 
   useEffect(() => {
