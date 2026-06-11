@@ -64,5 +64,8 @@ export const updateStageLightsPreference = async (
   enabled: boolean
 ): Promise<void> => {
   const userDocRef = doc(db, "users", uid)
-  await setDoc(userDocRef, {stageLightsEnabled: enabled}, {merge: true})
-}
+  await setDoc(
+    userDocRef,
+    { stageLightsEnabled: enabled, updatedAt: serverTimestamp() },
+    { merge: true }
+  )
