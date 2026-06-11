@@ -50,16 +50,29 @@ const STAGE_LIGHTS_CSS = `
 
 export default function StageLights() {
   useEffect(() => {
-    if (document.getElementById(CSS_ID)) {
-      return
+    const existing = document.getElementById(CSS_ID) as HTMLStyleElement | null
+    const styleEl = existing ?? document.createElement("style")
+
+    if (!existing) {
+      styleEl.id = CSS_ID
+      styleEl.textContent = STAGE_LIGHTS_CSS
+      styleEl.dataset.stageLightsCount = "0"
+      document.head.appendChild(styleEl)
     }
-    const styleEl = document.createElement("style")
-    styleEl.id = CSS_ID
-    styleEl.textContent = STAGE_LIGHTS_CSS
-    document.head.appendChild(styleEl)
+
+    styleEl.dataset.stageLightsCount = String(
+      Number(styleEl.dataset.stageLightsCount ?? "0") + 1
+    )
 
     return () => {
-      document.getElementById(CSS_ID)?.remove()
+      const current = document.getElementById(CSS_ID) as HTMLStyleElement | null
+      if (!current) return
+      const nextCount = Number(current.dataset.stageLightsCount ?? "1") - 1
+      if (nextCount <= 0) {
+        current.remove()
+      } else {
+        current.dataset.stageLightsCount = String(nextCount)
+      }
     }
   }, [])
 
