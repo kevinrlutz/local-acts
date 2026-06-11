@@ -69,3 +69,4 @@ export const updateStageLightsPreference = async (
     { stageLightsEnabled: enabled, updatedAt: serverTimestamp() },
     { merge: true }
   )
+}
