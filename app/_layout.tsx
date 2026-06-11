@@ -1,43 +1,46 @@
 import { Stack } from "expo-router";
 import React from "react";
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Colors from '../src/Colors';
+import { View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import Colors from "../src/Colors";
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.primaryWhite,
-          headerShadowVisible: false,
-        }}
-      >
-        <Stack.Screen
-          name="index"
-          options={{
-            headerShown: false,
+      <View style={{flex: 1}}>
+        <Stack
+          screenOptions={{
+            headerStyle: {backgroundColor: Colors.background},
+            headerTintColor: Colors.primaryWhite,
+            headerShadowVisible: false,
           }}
-        />
-        <Stack.Screen
-          name="(auth)"
-          options={{
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="act"
-          options={{
-            title: "Act Profile",
-          }}
-        />
-        <Stack.Screen
-          name="update-location"
-          options={{
-            title: "Update Location",
-          }}
-        />
-      </Stack>
+        >
+          <Stack.Screen
+            name="index"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="(auth)"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="act"
+            options={{
+              title: "Act Profile",
+            }}
+          />
+          <Stack.Screen
+            name="update-location"
+            options={{
+              title: "Update Location",
+            }}
+          />
+        </Stack>
+      </View>
     </SafeAreaProvider>
-  );
+  )
 }

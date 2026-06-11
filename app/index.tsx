@@ -1,37 +1,58 @@
 import { Feather } from "@expo/vector-icons";
 import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getDownloadURL, ref } from "firebase/storage";
+import StageLights from "../src/components/StageLights";
 import { auth, storage } from "../src/lib/firebase";
 import { getAllActs } from "../src/services/acts";
-import { getAppUserFromFirestore } from "../src/services/userProfile";
+import {
+  getAppUserFromFirestore,
+  updateStageLightsPreference,
+} from "../src/services/userProfile";
 
-import type { ActCategory, ActProfile } from '@/src/types/acts';
-import { AppUser } from '@/src/types/auth';
+import type { ActCategory, ActProfile } from "@/src/types/acts";
+import { AppUser } from "@/src/types/auth";
 import Colors from "../src/Colors";
 
-const LOGIN_ROUTE = "/(auth)/login" as Href;
-const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href;
-const UPDATE_LOCATION_ROUTE = "/update-location" as Href;
-const CREATE_ACT_ROUTE = "/act/create-act" as Href;
-const ACT_PROFILE_ROUTE = "/act" as Href;
-const PAGE_SIZE = 10;
-const DISTANCE_OPTIONS = [10, 25, 50, 100];
-const CATEGORY_OPTIONS: ("All" | ActCategory)[] = ["All", "Musician", "Comedian", "Other"];
-const DESCRIPTION_PREVIEW_MAX_LENGTH = 60;
+const LOGIN_ROUTE = "/(auth)/login" as Href
+const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href
+const UPDATE_LOCATION_ROUTE = "/update-location" as Href
+const CREATE_ACT_ROUTE = "/act/create-act" as Href
+const ACT_PROFILE_ROUTE = "/act" as Href
+const PAGE_SIZE = 10
+const DISTANCE_OPTIONS = [10, 25, 50, 100]
+const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
+  "All",
+  "Musician",
+  "Comedian",
+  "Other",
+]
+const DESCRIPTION_PREVIEW_MAX_LENGTH = 60
 
-const { width: screenWidth } = Dimensions.get('window');
-const isMobile = screenWidth < 768;
+const {width: screenWidth} = Dimensions.get("window")
+const isMobile = screenWidth < 768
 
-type ActWithDistance = ActProfile & { distanceInMiles: number | null };
+type ActWithDistance = ActProfile & {distanceInMiles: number | null}
 
-const EARTH_RADIUS_MILES = 3958.8;
+const EARTH_RADIUS_MILES = 3958.8
 
-const toRadians = (value: number) => (value * Math.PI) / 180;
+const toRadians = (value: number) => (value * Math.PI) / 180
 
 const calculateDistanceMiles = (
   lat1: number,
@@ -39,309 +60,376 @@ const calculateDistanceMiles = (
   lat2: number,
   lon2: number
 ) => {
-  const dLat = toRadians(lat2 - lat1);
-  const dLon = toRadians(lon2 - lon1);
+  const dLat = toRadians(lat2 - lat1)
+  const dLon = toRadians(lon2 - lon1)
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRadians(lat1)) *
       Math.cos(toRadians(lat2)) *
       Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return EARTH_RADIUS_MILES * c;
-};
+      Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return EARTH_RADIUS_MILES * c
+}
 
 const formatActLocation = (act: ActProfile) => {
-  const city = act.location?.city;
-  const state = act.location?.state;
+  const city = act.location?.city
+  const state = act.location?.state
   if (city && state) {
-    return `${city}, ${state}`;
+    return `${city}, ${state}`
   }
-  return act.location?.formattedAddress ?? "Location unavailable";
-};
+  return act.location?.formattedAddress ?? "Location unavailable"
+}
 
 const formatActDescriptionPreview = (description?: string | null) => {
   if (!description) {
-    return null;
+    return null
   }
-  const trimmed = description.trim();
+  const trimmed = description.trim()
   if (!trimmed) {
-    return null;
+    return null
   }
   if (trimmed.length <= DESCRIPTION_PREVIEW_MAX_LENGTH) {
-    return trimmed;
+    return trimmed
   }
-  return `${trimmed.slice(0, DESCRIPTION_PREVIEW_MAX_LENGTH).trimEnd()}...`;
-};
+  return `${trimmed.slice(0, DESCRIPTION_PREVIEW_MAX_LENGTH).trimEnd()}...`
+}
 
 export default function Index() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(() => auth.currentUser);
-  const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser);
-  const [userProfile, setUserProfile] = useState<AppUser | null>(null);
-  const [acts, setActs] = useState<ActProfile[]>([]);
-  const [actsLoading, setActsLoading] = useState(false);
-  const [actsError, setActsError] = useState<string | null>(null);
-  const [actImageUrls, setActImageUrls] = useState<Record<string, string>>({});
-  const [distanceFilter, setDistanceFilter] = useState<number>(DISTANCE_OPTIONS[1]);
-  const [categoryFilter, setCategoryFilter] = useState<"All" | ActCategory>("All");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const router = useRouter()
+  const [user, setUser] = useState<User | null>(() => auth.currentUser)
+  const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser)
+  const [userProfile, setUserProfile] = useState<AppUser | null>(null)
+  const [acts, setActs] = useState<ActProfile[]>([])
+  const [actsLoading, setActsLoading] = useState(false)
+  const [actsError, setActsError] = useState<string | null>(null)
+  const [actImageUrls, setActImageUrls] = useState<Record<string, string>>({})
+  const [distanceFilter, setDistanceFilter] = useState<number>(
+    DISTANCE_OPTIONS[1]
+  )
+  const [categoryFilter, setCategoryFilter] = useState<"All" | ActCategory>(
+    "All"
+  )
+  const [currentPage, setCurrentPage] = useState(1)
+  const [isMenuVisible, setIsMenuVisible] = useState(false)
+  const [stageLightsEnabled, setStageLightsEnabled] = useState(true)
+  const stageLightsInitialized = useRef(false)
 
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.title = "Local Acts";
+      document.title = "Local Acts"
     }
-  }, []);
+  }, [])
+
+  useEffect(() => {
+    if (userProfile !== null && !stageLightsInitialized.current) {
+      stageLightsInitialized.current = true
+      setStageLightsEnabled(userProfile.stageLightsEnabled ?? true)
+    }
+  }, [userProfile])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
-      setUser(nextUser);
-      setCheckingAuth(false);
+      setUser(nextUser)
+      setCheckingAuth(false)
       if (!nextUser) {
-        router.replace(LOGIN_ROUTE);
+        router.replace(LOGIN_ROUTE)
       }
-    });
-    return unsubscribe;
-  }, [router]);
+    })
+    return unsubscribe
+  }, [router])
 
   useEffect(() => {
     if (user) {
       const fetchProfile = async () => {
         try {
-          const profile = await getAppUserFromFirestore(user.uid);
-          setUserProfile(profile);
+          const profile = await getAppUserFromFirestore(user.uid)
+          setUserProfile(profile)
         } catch (error) {
-          console.error("Failed to fetch user profile:", error);
+          console.error("Failed to fetch user profile:", error)
           // Optionally, set a default or handle error
         }
-      };
-      fetchProfile();
+      }
+      fetchProfile()
     } else {
-      setUserProfile(null);
+      setUserProfile(null)
     }
-  }, [user]);
+  }, [user])
 
   const fetchProfile = useCallback(async () => {
     if (!user) {
-      setUserProfile(null);
-      return;
+      setUserProfile(null)
+      return
     }
     try {
-      const profile = await getAppUserFromFirestore(user.uid);
-      setUserProfile(profile);
+      const profile = await getAppUserFromFirestore(user.uid)
+      setUserProfile(profile)
     } catch (error) {
-      console.error("Failed to fetch user profile:", error);
+      console.error("Failed to fetch user profile:", error)
       // Optionally, set a default or handle error
     }
-  }, [user]);
+  }, [user])
 
   const fetchActs = useCallback(async () => {
     if (!user) {
-      setActs([]);
-      return;
+      setActs([])
+      return
     }
-    setActsLoading(true);
-    setActsError(null);
+    setActsLoading(true)
+    setActsError(null)
     try {
-      const allActs = await getAllActs();
-      setActs(allActs);
+      const allActs = await getAllActs()
+      setActs(allActs)
     } catch (error) {
-      console.error("Failed to fetch acts:", error);
-      setActsError("Unable to load acts right now.");
+      console.error("Failed to fetch acts:", error)
+      setActsError("Unable to load acts right now.")
     } finally {
-      setActsLoading(false);
+      setActsLoading(false)
     }
-  }, [user]);
+  }, [user])
 
   useEffect(() => {
-    fetchActs();
-  }, [fetchActs]);
+    fetchActs()
+  }, [fetchActs])
 
   useFocusEffect(
     useCallback(() => {
-      fetchActs();
-      fetchProfile();
+      fetchActs()
+      fetchProfile()
     }, [fetchActs, fetchProfile])
-  );
+  )
 
   useEffect(() => {
     if (acts.length === 0) {
-      setActImageUrls({});
-      return;
+      setActImageUrls({})
+      return
     }
     const fetchUrls = async () => {
-      const urls: Record<string, string> = {};
+      const urls: Record<string, string> = {}
       await Promise.all(
         acts.map(async (act) => {
           if (act.profileImageRef) {
             try {
-              const url = await getDownloadURL(ref(storage, act.profileImageRef));
-              urls[act.id] = url;
+              const url = await getDownloadURL(
+                ref(storage, act.profileImageRef)
+              )
+              urls[act.id] = url
             } catch (error) {
-              console.error(`Failed to fetch image URL for act ${act.id}:`, error);
+              console.error(
+                `Failed to fetch image URL for act ${act.id}:`,
+                error
+              )
             }
           }
         })
-      );
-      setActImageUrls(urls);
-    };
-    fetchUrls();
-  }, [acts]);
+      )
+      setActImageUrls(urls)
+    }
+    fetchUrls()
+  }, [acts])
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [distanceFilter, categoryFilter]);
+    setCurrentPage(1)
+  }, [distanceFilter, categoryFilter])
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
+      await signOut(auth)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to sign out.";
-      Alert.alert("Sign out failed", message);
+      const message = err instanceof Error ? err.message : "Unable to sign out."
+      Alert.alert("Sign out failed", message)
     }
-  };
+  }
 
-  const goToSetup = () => router.push(ACCOUNT_SETUP_ROUTE);
-  const goToUpdateLocation = () => router.push(UPDATE_LOCATION_ROUTE);
+  const goToSetup = () => router.push(ACCOUNT_SETUP_ROUTE)
+  const goToUpdateLocation = () => router.push(UPDATE_LOCATION_ROUTE)
   const goToAct = () => {
     if (userProfile?.hasActProfile && user?.uid) {
-      router.push((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(user.uid)}`) as Href);
-      return;
+      router.push(
+        `${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(user.uid)}` as Href
+      )
+      return
     }
-    router.push(CREATE_ACT_ROUTE);
-  };
+    router.push(CREATE_ACT_ROUTE)
+  }
 
-  const userCoordinates = userProfile?.location?.coordinates;
+  const userCoordinates = userProfile?.location?.coordinates
 
   const actsWithDistance = useMemo<ActWithDistance[]>(() => {
     return acts.map((act) => {
       if (userCoordinates && act.location?.coordinates) {
-        const { latitude: actLat, longitude: actLon } = act.location.coordinates;
-        const { latitude: userLat, longitude: userLon } = userCoordinates;
-        const distance = calculateDistanceMiles(userLat, userLon, actLat, actLon);
-        return { ...act, distanceInMiles: distance };
+        const {latitude: actLat, longitude: actLon} = act.location.coordinates
+        const {latitude: userLat, longitude: userLon} = userCoordinates
+        const distance = calculateDistanceMiles(
+          userLat,
+          userLon,
+          actLat,
+          actLon
+        )
+        return {...act, distanceInMiles: distance}
       }
-      return { ...act, distanceInMiles: null };
-    });
-  }, [acts, userCoordinates]);
+      return {...act, distanceInMiles: null}
+    })
+  }, [acts, userCoordinates])
 
   const filteredActs = useMemo(() => {
     const categoryFiltered = actsWithDistance.filter((act) =>
       categoryFilter === "All" ? true : act.category === categoryFilter
-    );
+    )
 
     if (!userCoordinates) {
-      return categoryFiltered;
+      return categoryFiltered
     }
 
     return categoryFiltered
-      .filter((act) => typeof act.distanceInMiles === "number" && act.distanceInMiles <= distanceFilter)
+      .filter(
+        (act) =>
+          typeof act.distanceInMiles === "number" &&
+          act.distanceInMiles <= distanceFilter
+      )
       .sort((a, b) => {
         if (a.distanceInMiles === null) {
-          return 1;
+          return 1
         }
         if (b.distanceInMiles === null) {
-          return -1;
+          return -1
         }
-        return a.distanceInMiles - b.distanceInMiles;
-      });
-  }, [actsWithDistance, categoryFilter, distanceFilter, userCoordinates]);
+        return a.distanceInMiles - b.distanceInMiles
+      })
+  }, [actsWithDistance, categoryFilter, distanceFilter, userCoordinates])
 
-  const totalPages = Math.max(1, Math.ceil(filteredActs.length / PAGE_SIZE));
-  const paginatedActs = filteredActs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filteredActs.length / PAGE_SIZE))
+  const paginatedActs = filteredActs.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  )
 
   useEffect(() => {
     if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
+      setCurrentPage(totalPages)
     }
-  }, [currentPage, totalPages]);
+  }, [currentPage, totalPages])
 
-  const renderActItem = useCallback(({ item }: { item: ActWithDistance }) => {
-    const descriptionPreview = formatActDescriptionPreview(item.description);
-    return (
-      <Pressable style={styles.actCard} onPress={() => router.push((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}`) as Href)}>
-        <Image
-          source={actImageUrls[item.id] ? { uri: actImageUrls[item.id] } : require('@/assets/images/icon.png')}
-          style={styles.actImage}
-          accessibilityLabel={`${item.name} profile photo`}
-        />
-        <View style={styles.actContent}>
-          <Text style={styles.actName}>{item.name}</Text>
-          <Text style={styles.actMeta}>{item.category}</Text>
-          <Text style={styles.actMeta}>{formatActLocation(item)}</Text>
-          {descriptionPreview ? (
-            <Text style={styles.actDescription}>{descriptionPreview}</Text>
-          ) : null}
-          {typeof item.distanceInMiles === "number" && (
-            <Text style={styles.actDistance}>{item.distanceInMiles.toFixed(1)} miles away</Text>
-          )}
-        </View>
-      </Pressable>
-    );
-  }, [actImageUrls, router]);
-
-  const renderEmptyActs = useCallback(() => (
-    <View style={styles.emptyState}>
-      {actsLoading ? (
-        <ActivityIndicator color={Colors.secondaryAction} />
-      ) : (
-        <Text style={styles.emptyText}>
-          {userCoordinates
-            ? "No acts match your current filters. Try expanding the distance or picking a different category."
-            : "Add a location to start discovering acts nearby."
+  const renderActItem = useCallback(
+    ({item}: {item: ActWithDistance}) => {
+      const descriptionPreview = formatActDescriptionPreview(item.description)
+      return (
+        <Pressable
+          style={styles.actCard}
+          onPress={() =>
+            router.push(
+              `${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}` as Href
+            )
           }
-        </Text>
-      )}
-    </View>
-  ), [actsLoading, userCoordinates]);
+        >
+          <Image
+            source={
+              actImageUrls[item.id]
+                ? {uri: actImageUrls[item.id]}
+                : require("@/assets/images/icon.png")
+            }
+            style={styles.actImage}
+            accessibilityLabel={`${item.name} profile photo`}
+          />
+          <View style={styles.actContent}>
+            <Text style={styles.actName}>{item.name}</Text>
+            <Text style={styles.actMeta}>{item.category}</Text>
+            <Text style={styles.actMeta}>{formatActLocation(item)}</Text>
+            {descriptionPreview ? (
+              <Text style={styles.actDescription}>{descriptionPreview}</Text>
+            ) : null}
+            {typeof item.distanceInMiles === "number" && (
+              <Text style={styles.actDistance}>
+                {item.distanceInMiles.toFixed(1)} miles away
+              </Text>
+            )}
+          </View>
+        </Pressable>
+      )
+    },
+    [actImageUrls, router]
+  )
+
+  const renderEmptyActs = useCallback(
+    () => (
+      <View style={styles.emptyState}>
+        {actsLoading ? (
+          <ActivityIndicator color={Colors.secondaryAction} />
+        ) : (
+          <Text style={styles.emptyText}>
+            {userCoordinates
+              ? "No acts match your current filters. Try expanding the distance or picking a different category."
+              : "Add a location to start discovering acts nearby."}
+          </Text>
+        )}
+      </View>
+    ),
+    [actsLoading, userCoordinates]
+  )
 
   const advancePage = (delta: number) => {
     setCurrentPage((prev) => {
-      const next = prev + delta;
+      const next = prev + delta
       if (next < 1) {
-        return 1;
+        return 1
       }
       if (next > totalPages) {
-        return totalPages;
+        return totalPages
       }
-      return next;
-    });
-  };
+      return next
+    })
+  }
 
-  const closeMenu = () => setIsMenuVisible(false);
-  const openMenu = () => setIsMenuVisible(true);
+  const closeMenu = () => setIsMenuVisible(false)
+  const openMenu = () => setIsMenuVisible(true)
 
   const handleMenuActPress = () => {
-    closeMenu();
-    goToAct();
-  };
+    closeMenu()
+    goToAct()
+  }
 
   const handleMenuSignOut = () => {
-    closeMenu();
-    void handleSignOut();
-  };
+    closeMenu()
+    void handleSignOut()
+  }
+
+  const handleMenuToggleStageLights = () => {
+    closeMenu()
+    const newValue = !stageLightsEnabled
+    setStageLightsEnabled(newValue)
+    if (user?.uid) {
+      void updateStageLightsPreference(user.uid, newValue)
+    }
+  }
 
   const locationSummary = userProfile?.location
     ? `${userProfile.location.city ?? userProfile.location.formattedAddress ?? "Unknown"}${
         userProfile.location.state ? `, ${userProfile.location.state}` : ""
       }`
-    : "Unknown";
+    : "Unknown"
 
   if (checkingAuth) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator />
       </View>
-    );
+    )
   }
 
   if (!user) {
-    return <View style={styles.centered} />;
+    return <View style={styles.centered} />
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={Platform.OS === 'web' ? ['top', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView
+      style={styles.container}
+      edges={
+        Platform.OS === "web"
+          ? ["top", "left", "right"]
+          : ["top", "bottom", "left", "right"]
+      }
+    >
+      {stageLightsEnabled && <StageLights />}
       <FlatList
         data={paginatedActs}
         keyExtractor={(item) => item.id}
@@ -360,24 +448,29 @@ export default function Index() {
               </Pressable>
             </View>
             <Image
-              source={require('@/assets/images/icon.png')}
+              source={require("@/assets/images/icon.png")}
               style={styles.logo}
               accessibilityRole="image"
               accessibilityLabel="Local Acts logo"
             />
             <Text style={styles.title}>Local Acts</Text>
             <Text style={styles.subtitle}>
-              Welcome back, {user.displayName || user.email || "New Local Acts fan"}!
+              Welcome back,{" "}
+              {user.displayName || user.email || "New Local Acts fan"}!
             </Text>
             <Text style={styles.subtitle}>
               Currently discovering acts in {locationSummary}
             </Text>
             <Pressable
               style={styles.primaryButton}
-              onPress={userProfile?.location?.rawInput ? goToUpdateLocation : goToSetup}
+              onPress={
+                userProfile?.location?.rawInput ? goToUpdateLocation : goToSetup
+              }
             >
               <Text style={styles.primaryButtonText}>
-                {userProfile?.location?.rawInput ? 'Update Location' : 'Finish Profile Setup'}
+                {userProfile?.location?.rawInput
+                  ? "Update Location"
+                  : "Finish Profile Setup"}
               </Text>
             </Pressable>
             <View style={styles.filtersWrapper}>
@@ -398,7 +491,8 @@ export default function Index() {
                       <Text
                         style={[
                           styles.filterChipText,
-                          distanceFilter === option && styles.filterChipTextActive,
+                          distanceFilter === option &&
+                            styles.filterChipTextActive,
                           !userCoordinates && styles.filterChipTextDisabled,
                         ]}
                       >
@@ -423,7 +517,8 @@ export default function Index() {
                       <Text
                         style={[
                           styles.filterChipText,
-                          categoryFilter === category && styles.filterChipTextActive,
+                          categoryFilter === category &&
+                            styles.filterChipTextActive,
                         ]}
                       >
                         {category}
@@ -441,7 +536,10 @@ export default function Index() {
             <View style={styles.footerContainer}>
               <View style={styles.pagination}>
                 <Pressable
-                  style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+                  style={[
+                    styles.paginationButton,
+                    currentPage === 1 && styles.paginationButtonDisabled,
+                  ]}
                   disabled={currentPage === 1}
                   onPress={() => advancePage(-1)}
                 >
@@ -453,7 +551,8 @@ export default function Index() {
                 <Pressable
                   style={[
                     styles.paginationButton,
-                    currentPage === totalPages && styles.paginationButtonDisabled,
+                    currentPage === totalPages &&
+                      styles.paginationButtonDisabled,
                   ]}
                   disabled={currentPage === totalPages}
                   onPress={() => advancePage(1)}
@@ -481,7 +580,19 @@ export default function Index() {
             <Text style={styles.menuHeader}>Account</Text>
             <Pressable style={styles.menuAction} onPress={handleMenuActPress}>
               <Text style={styles.menuActionText}>
-                {userProfile?.hasActProfile ? "Manage Act Profile" : "Create Act Profile"}
+                {userProfile?.hasActProfile
+                  ? "Manage Act Profile"
+                  : "Create Act Profile"}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.menuAction}
+              onPress={handleMenuToggleStageLights}
+            >
+              <Text style={styles.menuActionText}>
+                {stageLightsEnabled
+                  ? "Turn Off Stage Lights"
+                  : "Turn On Stage Lights"}
               </Text>
             </Pressable>
             <Pressable style={styles.menuAction} onPress={handleMenuSignOut}>
@@ -491,7 +602,7 @@ export default function Index() {
         </View>
       </Modal>
     </SafeAreaView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
@@ -735,4 +846,4 @@ const styles = StyleSheet.create({
     color: Colors.primaryWhite,
     fontWeight: "600",
   },
-});
+})
