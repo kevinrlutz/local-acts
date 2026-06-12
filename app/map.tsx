@@ -194,81 +194,87 @@ export default function MapScreen() {
             </Animated.View>
           </Pressable>
 
-          {/* Collapsible body */}
+          {/* Collapsible body - outer wrapper for maxHeight */}
           <Animated.View
             style={{
-              opacity: slideAnimNative,
-              transform: [
-                {
-                  translateY: slideAnimNative.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-8, 0],
-                  }),
-                },
-              ],
-              overflow: "hidden",
               maxHeight: slideAnimJS.interpolate({
                 inputRange: [0, 1],
                 outputRange: [0, 200],
               }),
+              overflow: "hidden",
             }}
           >
-            <View style={styles.filterBody}>
-              {/* Distance row */}
-              <View style={styles.filterRow}>
-                <Text style={styles.filterLabel}>Distance</Text>
-                <View style={styles.chipRow}>
-                  {DISTANCE_OPTIONS.map((option) => (
-                    <Pressable
-                      key={option}
-                      style={[
-                        styles.filterChip,
-                        distanceFilter === option && styles.filterChipActive,
-                        !userCoordinates && styles.filterChipDisabled,
-                      ]}
-                      disabled={!userCoordinates}
-                      onPress={() => setDistanceFilter(option)}
-                    >
-                      <Text
+            {/* Inner view for opacity/transform animations */}
+            <Animated.View
+              style={{
+                opacity: slideAnimNative,
+                transform: [
+                  {
+                    translateY: slideAnimNative.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-8, 0],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <View style={styles.filterBody}>
+                {/* Distance row */}
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Distance</Text>
+                  <View style={styles.chipRow}>
+                    {DISTANCE_OPTIONS.map((option) => (
+                      <Pressable
+                        key={option}
                         style={[
-                          styles.filterChipText,
-                          distanceFilter === option && styles.filterChipTextActive,
-                          !userCoordinates && styles.filterChipTextDisabled,
+                          styles.filterChip,
+                          distanceFilter === option && styles.filterChipActive,
+                          !userCoordinates && styles.filterChipDisabled,
                         ]}
+                        disabled={!userCoordinates}
+                        onPress={() => setDistanceFilter(option)}
                       >
-                        {option} mi
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            distanceFilter === option && styles.filterChipTextActive,
+                            !userCoordinates && styles.filterChipTextDisabled,
+                          ]}
+                        >
+                          {option} mi
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
-              </View>
 
-              {/* Category row */}
-              <View style={styles.filterRow}>
-                <Text style={styles.filterLabel}>Category</Text>
-                <View style={styles.chipRow}>
-                  {CATEGORY_OPTIONS.map((category) => (
-                    <Pressable
-                      key={category}
-                      style={[
-                        styles.filterChip,
-                        categoryFilter === category && styles.filterChipActive,
-                      ]}
-                      onPress={() => setCategoryFilter(category)}
-                    >
-                      <Text
+                {/* Category row */}
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Category</Text>
+                  <View style={styles.chipRow}>
+                    {CATEGORY_OPTIONS.map((category) => (
+                      <Pressable
+                        key={category}
                         style={[
-                          styles.filterChipText,
-                          categoryFilter === category && styles.filterChipTextActive,
+                          styles.filterChip,
+                          categoryFilter === category && styles.filterChipActive,
                         ]}
+                        onPress={() => setCategoryFilter(category)}
                       >
-                        {category}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            categoryFilter === category && styles.filterChipTextActive,
+                          ]}
+                        >
+                          {category}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
               </View>
-            </View>
+            </Animated.View>
           </Animated.View>
         </View>
       </View>
