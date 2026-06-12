@@ -35,6 +35,7 @@ const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href
 const UPDATE_LOCATION_ROUTE = "/update-location" as Href
 const CREATE_ACT_ROUTE = "/act/create-act" as Href
 const ACT_PROFILE_ROUTE = "/act" as Href
+const MAP_ROUTE = "/map" as Href
 const PAGE_SIZE = 10
 const DISTANCE_OPTIONS = [10, 25, 50, 100]
 const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
@@ -473,6 +474,12 @@ export default function Index() {
                   : "Finish Profile Setup"}
               </Text>
             </Pressable>
+            <Pressable
+              style={styles.mapButton}
+              onPress={() => router.push(MAP_ROUTE)}
+            >
+              <Text style={styles.secondaryButtonText}>Map View</Text>
+            </Pressable>
             <View style={styles.filtersWrapper}>
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Distance</Text>
@@ -670,6 +677,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
+  },
+  mapButton: {
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    width: "90%",
+    maxWidth: 360,
   },
   secondaryButtonText: {
     color: Colors.primaryWhite,

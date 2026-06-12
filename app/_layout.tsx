@@ -39,6 +39,12 @@ export default function RootLayout() {
               title: "Update Location",
             }}
           />
+          <Stack.Screen
+            name="map"
+            options={{
+              title: "Map View",
+            }}
+          />
         </Stack>
       </View>
     </SafeAreaProvider>
