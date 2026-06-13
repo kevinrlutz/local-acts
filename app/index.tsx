@@ -36,6 +36,9 @@ const UPDATE_LOCATION_ROUTE = "/update-location" as Href
 const CREATE_ACT_ROUTE = "/act/create-act" as Href
 const ACT_PROFILE_ROUTE = "/act" as Href
 const MAP_ROUTE = "/map" as Href
+const VENUES_ROUTE = "/venues" as Href
+const CREATE_VENUE_ROUTE = "/venue/create-venue" as Href
+const VENUE_PROFILE_ROUTE = "/venue" as Href
 const PAGE_SIZE = 10
 const DISTANCE_OPTIONS = [10, 25, 50, 100]
 const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
@@ -254,6 +257,16 @@ export default function Index() {
     router.push(CREATE_ACT_ROUTE)
   }
 
+  const goToVenue = () => {
+    if (userProfile?.hasVenueProfile && user?.uid) {
+      router.push(
+        `${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(user.uid)}` as Href
+      )
+      return
+    }
+    router.push(CREATE_VENUE_ROUTE)
+  }
+
   const userCoordinates = userProfile?.location?.coordinates
 
   const actsWithDistance = useMemo<ActWithDistance[]>(() => {
@@ -389,6 +402,11 @@ export default function Index() {
     goToAct()
   }
 
+  const handleMenuVenuePress = () => {
+    closeMenu()
+    goToVenue()
+  }
+
   const handleMenuSignOut = () => {
     closeMenu()
     void handleSignOut()
@@ -474,12 +492,20 @@ export default function Index() {
                   : "Finish Profile Setup"}
               </Text>
             </Pressable>
-            <Pressable
-              style={styles.mapButton}
-              onPress={() => router.push(MAP_ROUTE)}
-            >
-              <Text style={styles.secondaryButtonText}>Map View</Text>
-            </Pressable>
+            <View style={styles.secondaryButtonRow}>
+              <Pressable
+                style={styles.halfButton}
+                onPress={() => router.push(MAP_ROUTE)}
+              >
+                <Text style={styles.secondaryButtonText}>Map View</Text>
+              </Pressable>
+              <Pressable
+                style={styles.halfButton}
+                onPress={() => router.push(VENUES_ROUTE)}
+              >
+                <Text style={styles.secondaryButtonText}>Venues</Text>
+              </Pressable>
+            </View>
             <View style={styles.filtersWrapper}>
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Distance</Text>
@@ -592,6 +618,13 @@ export default function Index() {
                   : "Create Act Profile"}
               </Text>
             </Pressable>
+            <Pressable style={styles.menuAction} onPress={handleMenuVenuePress}>
+              <Text style={styles.menuActionText}>
+                {userProfile?.hasVenueProfile
+                  ? "Manage Venue Profile"
+                  : "Create Venue Profile"}
+              </Text>
+            </Pressable>
             <Pressable
               style={styles.menuAction}
               onPress={handleMenuToggleStageLights}
@@ -672,6 +705,20 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   secondaryButton: {
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  secondaryButtonRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "90%",
+    maxWidth: 360,
+  },
+  halfButton: {
+    flex: 1,
     borderWidth: 1,
     borderColor: Colors.contentBorder,
     borderRadius: 12,

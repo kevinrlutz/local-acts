@@ -34,6 +34,12 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="venue"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
             name="update-location"
             options={{
               title: "Update Location",
@@ -43,6 +49,12 @@ export default function RootLayout() {
             name="map"
             options={{
               title: "Map View",
+            }}
+          />
+          <Stack.Screen
+            name="venues"
+            options={{
+              title: "Venues",
             }}
           />
         </Stack>

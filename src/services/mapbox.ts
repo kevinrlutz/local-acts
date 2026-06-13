@@ -43,6 +43,56 @@ const buildQuery = (input: GeocodeLocationInput): string => {
   return `${city}, ${state}`;
 };
 
+export type AddressSuggestion = {
+  id: string;
+  placeName: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  coordinates: { latitude: number; longitude: number };
+};
+
+export const searchAddresses = async (
+  query: string
+): Promise<AddressSuggestion[]> => {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const token = assertToken();
+  const encodedQuery = encodeURIComponent(trimmed);
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?types=address&limit=5&autocomplete=true&country=us&access_token=${token}`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new MapboxError("Address search failed.");
+  }
+
+  const data = await response.json();
+  if (!data?.features?.length) {
+    return [];
+  }
+
+  return (data.features as Record<string, unknown>[]).map((feature) => {
+    const center = feature.center as [number, number] | undefined;
+    const [longitude, latitude] = center ?? [0, 0];
+    const context = (feature.context as { id: string; text?: string }[]) ?? [];
+    const findCtx = (prefix: string) =>
+      context.find((c) => c.id.startsWith(prefix))?.text ?? "";
+
+    return {
+      id: (feature.id as string) ?? "",
+      placeName: (feature.place_name as string) ?? "",
+      address: (feature.text as string) ? `${feature.address ?? ""} ${feature.text as string}`.trim() : (feature.place_name as string) ?? "",
+      city: findCtx("place"),
+      state: findCtx("region"),
+      zip: findCtx("postcode"),
+      coordinates: { latitude, longitude },
+    };
+  });
+};
+
 export const geocodeLocation = async (
   input: GeocodeLocationInput
 ): Promise<GeocodeLocationResult> => {

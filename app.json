@@ -28,7 +28,12 @@
     },
     "plugins": [
       "expo-router",
-      "expo-image-picker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Local Acts to access your photos to upload images for events and profiles."
+        }
+      ],
       [
         "expo-splash-screen",
         {

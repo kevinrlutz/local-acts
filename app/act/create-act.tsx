@@ -1,23 +1,23 @@
-import * as ImagePicker from "expo-image-picker";
 import { Href, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
+import { useImagePicker } from "@/src/hooks/useImagePicker";
 import { auth, storage } from "@/src/lib/firebase";
 import { createActProfile } from "@/src/services/acts";
 import { geocodeLocation, LocationMode, MissingMapboxTokenError } from "@/src/services/mapbox";
@@ -68,6 +68,7 @@ const validateSocialLinks = (linkValues: Record<SocialLinkKey, string>): ActSoci
 
 export default function CreateActScreen() {
   const router = useRouter();
+  const { pickImage } = useImagePicker();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [isCheckingUser, setIsCheckingUser] = useState(!auth.currentUser);
   const [actName, setActName] = useState("");
@@ -131,37 +132,12 @@ export default function CreateActScreen() {
     return { mode: "city-state" as const, city: normalizedCity, state: normalizedState };
   };
 
-  const ensureMediaPermission = async () => {
-    const { granted, status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!granted) {
-      Alert.alert(
-        "Permission needed",
-        status === ImagePicker.PermissionStatus.DENIED
-          ? "Please enable photo permissions to upload an act profile picture."
-          : "Unable to access your media library."
-      );
-      return false;
-    }
-    return true;
-  };
-
   const handlePickImage = async () => {
-  const canAccessMedia = await ensureMediaPermission();
-  if (!canAccessMedia) {
-    return;
-  }
-  const result = await ImagePicker.launchImageLibraryAsync({
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 0.7,
-  });
-  if (!result.canceled) {
-    const asset = result.assets?.[0];
-    if (asset?.uri) {
-      setProfileImageUri(asset.uri);
+    const result = await pickImage({ quality: 0.7 });
+    if (result) {
+      setProfileImageUri(result.uri);
     }
-  }
-};
+  };
 
   const handleLinkChange = (key: SocialLinkKey, value: string) => {
     setLinks((prev) => ({ ...prev, [key]: value }));

@@ -33,7 +33,7 @@ export default function ActLayout() {
                 }}
             />
             <Stack.Screen
-                name="[uid]"
+                name="index"
                 options={{
                     title: "Act Profile",
                     headerShown: false,

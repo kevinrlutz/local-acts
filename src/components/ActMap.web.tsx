@@ -7,7 +7,7 @@ const DEFAULT_VIEW_STATE = { longitude: -98.35, latitude: 39.5, zoom: 4 }
 
 type ViewState = { longitude: number; latitude: number; zoom: number }
 
-export default function ActMap({ acts, userCoordinates, onPinPress }: ActMapProps) {
+export default function ActMap({ acts, userCoordinates, onPinPress, venues = [], onVenuePinPress }: ActMapProps) {
   const [viewState, setViewState] = useState<ViewState>(() =>
     userCoordinates
       ? { longitude: userCoordinates.longitude, latitude: userCoordinates.latitude, zoom: 10 }
@@ -68,6 +68,29 @@ export default function ActMap({ acts, userCoordinates, onPinPress }: ActMapProp
             />
           </Marker>
         ))}
+      {venues.map((venue) => (
+        <Marker
+          key={venue.id}
+          longitude={venue.coordinates.longitude}
+          latitude={venue.coordinates.latitude}
+        >
+          <div
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              backgroundColor: "#03DAC6",
+              border: "2px solid #F5F5F5",
+              cursor: "pointer",
+            }}
+            title={venue.name}
+            onClick={(e) => {
+              e.stopPropagation()
+              onVenuePinPress?.(venue.id)
+            }}
+          />
+        </Marker>
+      ))}
     </Map>
   )
 }

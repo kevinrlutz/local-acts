@@ -3,12 +3,12 @@ import { Href, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    Pressable,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 
 import Colors from "../src/Colors";
@@ -17,11 +17,14 @@ import { auth } from "../src/lib/firebase";
 import { calculateDistanceMiles } from "../src/lib/geoUtils";
 import { getAllActs } from "../src/services/acts";
 import { getAppUserFromFirestore } from "../src/services/userProfile";
+import { getAllVenues } from "../src/services/venues";
 import type { ActCategory, ActProfile } from "../src/types/acts";
 import type { AppUser } from "../src/types/auth";
+import type { VenueCategory, VenueProfile } from "../src/types/venues";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href
 const ACT_PROFILE_ROUTE = "/act" as Href
+const VENUE_PROFILE_ROUTE = "/venue" as Href
 const DISTANCE_OPTIONS = [10, 25, 50, 100]
 const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
   "All",
@@ -29,18 +32,31 @@ const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
   "Comedian",
   "Other",
 ]
+const VENUE_CATEGORY_OPTIONS: ("All" | VenueCategory)[] = [
+  "All",
+  "Bar / Club",
+  "Concert Hall",
+  "Theater",
+  "Restaurant",
+  "Other",
+]
 
+type MapMode = "acts" | "venues"
 type ActWithDistance = ActProfile & { distanceInMiles: number | null }
+type VenueWithDistance = VenueProfile & { distanceInMiles: number | null }
 
 export default function MapScreen() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(() => auth.currentUser)
   const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser)
   const [userProfile, setUserProfile] = useState<AppUser | null>(null)
+  const [mapMode, setMapMode] = useState<MapMode>("acts")
   const [acts, setActs] = useState<ActProfile[]>([])
+  const [venues, setVenues] = useState<VenueProfile[]>([])
   const [actsLoading, setActsLoading] = useState(false)
   const [distanceFilter, setDistanceFilter] = useState<number>(DISTANCE_OPTIONS[1])
   const [categoryFilter, setCategoryFilter] = useState<"All" | ActCategory>("All")
+  const [venueCategoryFilter, setVenueCategoryFilter] = useState<"All" | VenueCategory>("All")
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Native driver handles opacity/transform; JS driver handles maxHeight (layout prop)
   const slideAnimNative = useRef(new Animated.Value(0)).current
@@ -98,6 +114,22 @@ export default function MapScreen() {
     void fetchActs()
   }, [user])
 
+  useEffect(() => {
+    if (!user) {
+      setVenues([])
+      return
+    }
+    const fetchVenues = async () => {
+      try {
+        const allVenues = await getAllVenues()
+        setVenues(allVenues)
+      } catch (error) {
+        console.error("Failed to fetch venues:", error)
+      }
+    }
+    void fetchVenues()
+  }, [user])
+
   const userCoordinates = userProfile?.location?.coordinates
 
   const actsWithDistance = useMemo<ActWithDistance[]>(() => {
@@ -128,6 +160,32 @@ export default function MapScreen() {
     )
   }, [actsWithDistance, categoryFilter, distanceFilter, userCoordinates])
 
+  const venuesWithDistance = useMemo<VenueWithDistance[]>(() => {
+    return venues.map((venue) => {
+      if (userCoordinates) {
+        const { latitude: vLat, longitude: vLon } = venue.coordinates
+        const { latitude: uLat, longitude: uLon } = userCoordinates
+        return {
+          ...venue,
+          distanceInMiles: calculateDistanceMiles(uLat, uLon, vLat, vLon),
+        }
+      }
+      return { ...venue, distanceInMiles: null }
+    })
+  }, [venues, userCoordinates])
+
+  const filteredVenues = useMemo<VenueWithDistance[]>(() => {
+    const categoryFiltered = venuesWithDistance.filter((v) =>
+      venueCategoryFilter === "All" ? true : v.category === venueCategoryFilter
+    )
+    if (!userCoordinates) return categoryFiltered
+    return categoryFiltered.filter(
+      (v) =>
+        typeof v.distanceInMiles === "number" &&
+        v.distanceInMiles <= distanceFilter
+    )
+  }, [venuesWithDistance, venueCategoryFilter, distanceFilter, userCoordinates])
+
   const toggleFilters = () => {
     const toValue = filtersOpen ? 0 : 1
     setFiltersOpen(!filtersOpen)
@@ -152,6 +210,13 @@ export default function MapScreen() {
     [router]
   )
 
+  const handleVenuePinPress = useCallback(
+    (venueId: string) => {
+      router.push(`${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(venueId)}` as Href)
+    },
+    [router]
+  )
+
   if (checkingAuth) {
     return (
       <View style={styles.centered}>
@@ -167,9 +232,11 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <ActMap
-        acts={filteredActs}
+        acts={mapMode === "acts" ? filteredActs : []}
+        venues={mapMode === "venues" ? filteredVenues : []}
         userCoordinates={userCoordinates}
         onPinPress={handlePinPress}
+        onVenuePinPress={handleVenuePinPress}
       />
 
       {/* Filter dropdown overlaid on top of the map */}
@@ -193,6 +260,22 @@ export default function MapScreen() {
               <Feather name="chevron-down" size={18} color={Colors.primaryWhite} />
             </Animated.View>
           </Pressable>
+
+          {/* Mode toggle — always visible */}
+          <View style={styles.modeToggleRow}>
+            <Pressable
+              style={[styles.modeToggleButton, mapMode === "acts" && styles.modeToggleActive]}
+              onPress={() => setMapMode("acts")}
+            >
+              <Text style={[styles.modeToggleText, mapMode === "acts" && styles.modeToggleTextActive]}>Acts</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.modeToggleButton, mapMode === "venues" && styles.modeToggleActive]}
+              onPress={() => setMapMode("venues")}
+            >
+              <Text style={[styles.modeToggleText, mapMode === "venues" && styles.modeToggleTextActive]}>Venues</Text>
+            </Pressable>
+          </View>
 
           {/* Collapsible body - outer wrapper for maxHeight */}
           <Animated.View
@@ -252,25 +335,45 @@ export default function MapScreen() {
                 <View style={styles.filterRow}>
                   <Text style={styles.filterLabel}>Category</Text>
                   <View style={styles.chipRow}>
-                    {CATEGORY_OPTIONS.map((category) => (
-                      <Pressable
-                        key={category}
-                        style={[
-                          styles.filterChip,
-                          categoryFilter === category && styles.filterChipActive,
-                        ]}
-                        onPress={() => setCategoryFilter(category)}
-                      >
-                        <Text
-                          style={[
-                            styles.filterChipText,
-                            categoryFilter === category && styles.filterChipTextActive,
-                          ]}
-                        >
-                          {category}
-                        </Text>
-                      </Pressable>
-                    ))}
+                    {mapMode === "acts"
+                      ? CATEGORY_OPTIONS.map((category) => (
+                          <Pressable
+                            key={category}
+                            style={[
+                              styles.filterChip,
+                              categoryFilter === category && styles.filterChipActive,
+                            ]}
+                            onPress={() => setCategoryFilter(category)}
+                          >
+                            <Text
+                              style={[
+                                styles.filterChipText,
+                                categoryFilter === category && styles.filterChipTextActive,
+                              ]}
+                            >
+                              {category}
+                            </Text>
+                          </Pressable>
+                        ))
+                      : VENUE_CATEGORY_OPTIONS.map((category) => (
+                          <Pressable
+                            key={category}
+                            style={[
+                              styles.filterChip,
+                              venueCategoryFilter === category && styles.filterChipActive,
+                            ]}
+                            onPress={() => setVenueCategoryFilter(category)}
+                          >
+                            <Text
+                              style={[
+                                styles.filterChipText,
+                                venueCategoryFilter === category && styles.filterChipTextActive,
+                              ]}
+                            >
+                              {category}
+                            </Text>
+                          </Pressable>
+                        ))}
                   </View>
                 </View>
               </View>
@@ -312,7 +415,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.contentBorder,
-    width: "50%",
+    width: "75%",
   },
   filterHeader: {
     flexDirection: "row",
@@ -325,6 +428,32 @@ const styles = StyleSheet.create({
     color: Colors.primaryWhite,
     fontWeight: "700",
     fontSize: 14,
+  },
+  modeToggleRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    gap: 8,
+  },
+  modeToggleButton: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    alignItems: "center",
+  },
+  modeToggleActive: {
+    backgroundColor: Colors.secondaryAction,
+    borderColor: Colors.secondaryAction,
+  },
+  modeToggleText: {
+    color: Colors.secondaryGray,
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  modeToggleTextActive: {
+    color: Colors.secondaryBackground,
   },
   filterBody: {
     paddingHorizontal: 16,

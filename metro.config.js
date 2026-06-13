@@ -1,7 +1,8 @@
-        const { getDefaultConfig } = require('@expo/metro-config');
-        const defaultConfig = getDefaultConfig(__dirname);
+const { getDefaultConfig } = require('@expo/metro-config');
 
-        defaultConfig.resolver.sourceExts.push('cjs');
-        defaultConfig.resolver.unstable_enablePackageExports = false; // May be needed for older Firebase versions
+const defaultConfig = getDefaultConfig(__dirname);
 
-        module.exports = defaultConfig;
+defaultConfig.resolver.sourceExts.push('cjs');
+defaultConfig.resolver.unstable_enablePackageExports = false;
+
+module.exports = defaultConfig;
