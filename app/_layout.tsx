@@ -36,7 +36,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="venue"
             options={{
-              headerShown: false,
+              title: "Venue Profile",
             }}
           />
           <Stack.Screen

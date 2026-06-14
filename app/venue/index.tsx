@@ -3,13 +3,14 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { getDownloadURL, ref } from "firebase/storage";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -17,10 +18,10 @@ import Colors from "@/src/Colors";
 import { auth, storage } from "@/src/lib/firebase";
 import { getVenueProfileById } from "@/src/services/venues";
 import {
-    DayHours,
-    DayOfWeek,
-    DAYS_OF_WEEK,
-    VenueProfile,
+  DayHours,
+  DayOfWeek,
+  DAYS_OF_WEEK,
+  VenueProfile,
 } from "@/src/types/venues";
 
 const EDIT_VENUE_ROUTE = "/venue/edit-venue" as Href;
@@ -151,71 +152,69 @@ export default function VenueProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["right", "bottom", "left"]}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Hero image */}
-        <Image
-          source={
-            imageUrl
-              ? { uri: imageUrl }
-              : require("@/assets/images/icon.png")
-          }
-          style={styles.heroImage}
-          accessibilityLabel={`${venueProfile.name} profile photo`}
-        />
-
-        {/* Name & category */}
-        <View style={styles.section}>
-          <Text style={styles.venueName}>{venueProfile.name}</Text>
-          <Text style={styles.venueCategory}>{venueProfile.category}</Text>
-        </View>
-
-        {/* Address */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Address</Text>
-          <Text style={styles.addressLine}>{venueProfile.address}</Text>
-          <Text style={styles.addressMeta}>
-            {[venueProfile.city, venueProfile.state, venueProfile.zip]
-              .filter(Boolean)
-              .join(", ")}
-          </Text>
-        </View>
-
-        {/* Hours */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hours</Text>
-          {DAYS_OF_WEEK.map((day) => (
-            <View key={day} style={styles.hoursRow}>
-              <Text style={styles.hoursDay}>{DAY_LABELS[day]}</Text>
-              <Text
-                style={[
-                  styles.hoursValue,
-                  venueProfile.hours[day].closed && styles.hoursClosed,
-                ]}
-              >
-                {formatHours(venueProfile.hours[day])}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Owner actions */}
-        {isOwner && (
-          <Pressable
-            style={styles.editButton}
-            onPress={() =>
-              router.push(
-                `${EDIT_VENUE_ROUTE}?uid=${encodeURIComponent(venueProfile.id)}` as Href
-              )
+        <View style={styles.card}>
+          {/* Hero image */}
+          <Image
+            source={
+              imageUrl
+                ? { uri: imageUrl }
+                : require("@/assets/images/icon.png")
             }
-          >
-            <Text style={styles.editButtonText}>Edit Venue Profile</Text>
-          </Pressable>
-        )}
+            style={styles.heroImage}
+            accessibilityLabel={`${venueProfile.name} profile photo`}
+          />
 
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Back</Text>
-        </Pressable>
+          {/* Name & category */}
+          <View>
+            <Text style={styles.venueName}>{venueProfile.name}</Text>
+            <Text style={styles.venueCategory}>{venueProfile.category}</Text>
+          </View>
+
+          {/* Address */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Address</Text>
+            <Text style={styles.sectionText}>{venueProfile.address}</Text>
+            <Text style={styles.sectionSubtext}>
+              {[venueProfile.city, venueProfile.state, venueProfile.zip]
+                .filter(Boolean)
+                .join(", ")}
+            </Text>
+          </View>
+
+          {/* Hours */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Hours</Text>
+            {DAYS_OF_WEEK.map((day) => (
+              <View key={day} style={styles.hoursRow}>
+                <Text style={styles.hoursDay}>{DAY_LABELS[day]}</Text>
+                <Text
+                  style={[
+                    styles.hoursValue,
+                    venueProfile.hours[day].closed && styles.hoursClosed,
+                  ]}
+                >
+                  {formatHours(venueProfile.hours[day])}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Owner actions */}
+          {isOwner && (
+            <Pressable
+              style={styles.editButton}
+              onPress={() =>
+                router.push(
+                  `${EDIT_VENUE_ROUTE}?uid=${encodeURIComponent(venueProfile.id)}` as Href
+                )
+              }
+            >
+              <Text style={styles.editButtonText}>Edit Venue Profile</Text>
+            </Pressable>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -227,10 +226,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   content: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 48,
-    gap: 24,
+    paddingBottom: 24,
+    paddingTop: Platform.select({ ios: 12, android: 8, default: 24 }),
+    alignItems: "center",
   },
   centered: {
     flex: 1,
@@ -240,36 +240,43 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 16,
   },
+  card: {
+    width: "100%",
+    maxWidth: 720,
+    backgroundColor: Colors.secondaryBackground,
+    borderRadius: 24,
+    padding: 24,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+  },
   heroImage: {
     width: "100%",
     height: 240,
-    borderRadius: 20,
-    backgroundColor: Colors.contentBorder,
-    alignSelf: "center",
+    borderRadius: 18,
   },
   section: {
-    gap: 6,
+    marginTop: 12,
+    gap: 8,
   },
   venueName: {
-    color: Colors.primaryWhite,
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "700",
+    color: Colors.primaryWhite,
   },
   venueCategory: {
+    fontSize: 16,
     color: Colors.secondaryGray,
-    fontSize: 15,
   },
   sectionTitle: {
+    fontSize: 16,
     color: Colors.primaryWhite,
     fontWeight: "700",
-    fontSize: 16,
-    marginBottom: 4,
   },
-  addressLine: {
+  sectionText: {
     color: Colors.primaryWhite,
-    fontSize: 15,
   },
-  addressMeta: {
+  sectionSubtext: {
     color: Colors.secondaryGray,
     fontSize: 14,
   },
