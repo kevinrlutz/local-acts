@@ -64,7 +64,11 @@ const mapVenueSnapshot = (id: string, data: DocumentData): VenueProfile => ({
   id,
   ownerUid: (data.ownerUid as string) ?? id,
   name: data.name as string,
-  category: data.category as VenueProfile["category"],
+  categories: Array.isArray(data.categories)
+    ? (data.categories as VenueProfile["categories"])
+    : data.category
+    ? [data.category as import("@/src/types/venues").VenueCategory]
+    : [],
   address: data.address as string,
   city: data.city as string,
   state: data.state as string,
@@ -99,7 +103,7 @@ export const createVenueProfile = async (
   const {
     ownerUid,
     name,
-    category,
+    categories,
     address,
     city,
     state,
@@ -113,7 +117,7 @@ export const createVenueProfile = async (
   const data: Record<string, unknown> = {
     ownerUid,
     name: name.trim(),
-    category,
+    categories,
     address: address.trim(),
     city: city.trim(),
     state: state.trim(),
@@ -140,7 +144,7 @@ export const createVenueProfile = async (
 export const updateVenueProfile = async ({
   venueId,
   name,
-  category,
+  categories,
   address,
   city,
   state,
@@ -152,7 +156,7 @@ export const updateVenueProfile = async ({
 }: {
   venueId: string;
   name: string;
-  category: VenueProfile["category"];
+  categories: VenueProfile["categories"];
   address: string;
   city: string;
   state: string;
@@ -164,7 +168,7 @@ export const updateVenueProfile = async ({
 }): Promise<string> => {
   const data: Record<string, unknown> = {
     name: name.trim(),
-    category,
+    categories,
     address: address.trim(),
     city: city.trim(),
     state: state.trim(),

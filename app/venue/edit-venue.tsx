@@ -95,7 +95,7 @@ export default function EditVenueScreen() {
   const [venueProfile, setVenueProfile] = useState<VenueProfile | null>(null);
 
   const [venueName, setVenueName] = useState("");
-  const [category, setCategory] = useState<VenueCategory>("Bar / Club");
+  const [categories, setCategories] = useState<VenueCategory[]>(["Bar / Club"]);
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [hasImageChanged, setHasImageChanged] = useState(false);
   const [hours, setHours] = useState<WeeklyHours>({
@@ -153,7 +153,7 @@ export default function EditVenueScreen() {
         }
         setVenueProfile(profile);
         setVenueName(profile.name);
-        setCategory(profile.category);
+        setCategories(profile.categories ?? ["Bar / Club"]);
         setHours(profile.hours);
         // Pre-populate address query with the formatted address
         setAddressQuery(profile.formattedAddress);
@@ -281,7 +281,7 @@ export default function EditVenueScreen() {
       await updateVenueProfile({
         venueId: venueProfile.id,
         name: trimmedName,
-        category,
+        categories,
         address: selectedAddress.address,
         city: selectedAddress.city,
         state: selectedAddress.state,
@@ -398,16 +398,24 @@ export default function EditVenueScreen() {
                 {CATEGORY_OPTIONS.map((option) => (
                   <Pressable
                     key={option}
-                    onPress={() => setCategory(option)}
+                    onPress={() =>
+                      setCategories((prev) =>
+                        prev.includes(option)
+                          ? prev.length > 1
+                            ? prev.filter((c) => c !== option)
+                            : prev
+                          : [...prev, option]
+                      )
+                    }
                     style={[
                       styles.chip,
-                      category === option && styles.chipActive,
+                      categories.includes(option) && styles.chipActive,
                     ]}
                   >
                     <Text
                       style={[
                         styles.chipText,
-                        category === option && styles.chipTextActive,
+                        categories.includes(option) && styles.chipTextActive,
                       ]}
                     >
                       {option}

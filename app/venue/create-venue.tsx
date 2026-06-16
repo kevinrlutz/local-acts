@@ -86,7 +86,7 @@ export default function CreateVenueScreen() {
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [isCheckingUser, setIsCheckingUser] = useState(!auth.currentUser);
   const [venueName, setVenueName] = useState("");
-  const [category, setCategory] = useState<VenueCategory>("Bar / Club");
+  const [categories, setCategories] = useState<VenueCategory[]>(["Bar / Club"]);
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [hours, setHours] = useState<WeeklyHours>(DEFAULT_WEEKLY_HOURS);
 
@@ -225,7 +225,7 @@ export default function CreateVenueScreen() {
       const venueId = await createVenueProfile({
         ownerUid: user.uid,
         name: trimmedName,
-        category,
+        categories,
         address: selectedAddress.address,
         city: selectedAddress.city,
         state: selectedAddress.state,
@@ -300,16 +300,24 @@ export default function CreateVenueScreen() {
                 {CATEGORY_OPTIONS.map((option) => (
                   <Pressable
                     key={option}
-                    onPress={() => setCategory(option)}
+                    onPress={() =>
+                      setCategories((prev) =>
+                        prev.includes(option)
+                          ? prev.length > 1
+                            ? prev.filter((c) => c !== option)
+                            : prev
+                          : [...prev, option]
+                      )
+                    }
                     style={[
                       styles.chip,
-                      category === option && styles.chipActive,
+                      categories.includes(option) && styles.chipActive,
                     ]}
                   >
                     <Text
                       style={[
                         styles.chipText,
-                        category === option && styles.chipTextActive,
+                        categories.includes(option) && styles.chipTextActive,
                       ]}
                     >
                       {option}

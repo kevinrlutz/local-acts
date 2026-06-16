@@ -3,17 +3,17 @@ import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,8 +22,8 @@ import StageLights from "../src/components/StageLights";
 import { auth, storage } from "../src/lib/firebase";
 import { getAllActs } from "../src/services/acts";
 import {
-  getAppUserFromFirestore,
-  updateStageLightsPreference,
+    getAppUserFromFirestore,
+    updateStageLightsPreference,
 } from "../src/services/userProfile";
 import { getAllVenues } from "../src/services/venues";
 
@@ -142,8 +142,8 @@ export default function Index() {
   const [distanceFilter, setDistanceFilter] = useState<number>(
     DISTANCE_OPTIONS[1]
   )
-  const [categoryFilter, setCategoryFilter] = useState<"All" | ActCategory | VenueCategory>(
-    "All"
+  const [categoryFilter, setCategoryFilter] = useState<("All" | ActCategory | VenueCategory)[]>(
+    ["All"]
   )
   const [currentPage, setCurrentPage] = useState(1)
   const [isMenuVisible, setIsMenuVisible] = useState(false)
@@ -385,7 +385,7 @@ export default function Index() {
 
   const filteredActs = useMemo(() => {
     const categoryFiltered = actsWithDistance.filter((act) =>
-      categoryFilter === "All" ? true : act.category === categoryFilter
+      categoryFilter.includes("All") ? true : categoryFilter.includes(act.category)
     )
 
     if (!userCoordinates) {
@@ -411,7 +411,9 @@ export default function Index() {
 
   const filteredVenues = useMemo(() => {
     const categoryFiltered = venuesWithDistance.filter((venue) =>
-      categoryFilter === "All" ? true : venue.category === categoryFilter
+      categoryFilter.includes("All")
+        ? true
+        : venue.categories.some((c) => categoryFilter.includes(c))
     )
 
     if (!userCoordinates) {
@@ -509,7 +511,7 @@ export default function Index() {
         />
         <View style={styles.itemContent}>
           <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemMeta}>{item.category}</Text>
+          <Text style={styles.itemMeta}>{item.categories.join(", ")}</Text>
           <Text style={styles.itemMeta}>{formatVenueLocation(item)}</Text>
           {typeof item.distanceInMiles === "number" && (
             <Text style={styles.itemDistance}>
@@ -663,7 +665,7 @@ export default function Index() {
                 onPress={() => {
                   setViewMode("acts")
                   setCurrentPage(1)
-                  setCategoryFilter("All")
+                  setCategoryFilter(["All"])
                 }}
               >
                 <Text
@@ -683,7 +685,7 @@ export default function Index() {
                 onPress={() => {
                   setViewMode("venues")
                   setCurrentPage(1)
-                  setCategoryFilter("All")
+                  setCategoryFilter(["All"])
                 }}
               >
                 <Text
@@ -756,14 +758,25 @@ export default function Index() {
                       key={category}
                       style={[
                         styles.filterChip,
-                        categoryFilter === category && styles.filterChipActive,
+                        categoryFilter.includes(category) && styles.filterChipActive,
                       ]}
-                      onPress={() => setCategoryFilter(category)}
+                      onPress={() => {
+                        if (category === "All") {
+                          setCategoryFilter(["All"])
+                        } else if (categoryFilter.includes(category)) {
+                          const next = categoryFilter.filter((c) => c !== category)
+                          setCategoryFilter(next.length === 0 ? ["All"] : next)
+                        } else {
+                          setCategoryFilter(
+                            categoryFilter.filter((c) => c !== "All").concat(category)
+                          )
+                        }
+                      }}
                     >
                       <Text
                         style={[
                           styles.filterChipText,
-                          categoryFilter === category &&
+                          categoryFilter.includes(category) &&
                             styles.filterChipTextActive,
                         ]}
                       >

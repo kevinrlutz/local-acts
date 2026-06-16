@@ -3,14 +3,14 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { getDownloadURL, ref } from "firebase/storage";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    Image,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -18,10 +18,10 @@ import Colors from "@/src/Colors";
 import { auth, storage } from "@/src/lib/firebase";
 import { getVenueProfileById } from "@/src/services/venues";
 import {
-  DayHours,
-  DayOfWeek,
-  DAYS_OF_WEEK,
-  VenueProfile,
+    DayHours,
+    DayOfWeek,
+    DAYS_OF_WEEK,
+    VenueProfile,
 } from "@/src/types/venues";
 
 const EDIT_VENUE_ROUTE = "/venue/edit-venue" as Href;
@@ -169,7 +169,7 @@ export default function VenueProfileScreen() {
           {/* Name & category */}
           <View>
             <Text style={styles.venueName}>{venueProfile.name}</Text>
-            <Text style={styles.venueCategory}>{venueProfile.category}</Text>
+            <Text style={styles.venueCategory}>{venueProfile.categories.join(", ")}</Text>
           </View>
 
           {/* Address */}

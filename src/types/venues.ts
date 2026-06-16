@@ -51,7 +51,7 @@ export type VenueProfile = {
   id: string;
   ownerUid: string;
   name: string;
-  category: VenueCategory;
+  categories: VenueCategory[];
   address: string;
   city: string;
   state: string;
@@ -70,7 +70,7 @@ export type VenueProfile = {
 export type CreateVenueProfilePayload = {
   ownerUid: string;
   name: string;
-  category: VenueCategory;
+  categories: VenueCategory[];
   address: string;
   city: string;
   state: string;

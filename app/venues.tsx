@@ -1,4 +1,3 @@
-import { Feather } from "@expo/vector-icons";
 import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { getDownloadURL, ref } from "firebase/storage";
@@ -61,8 +60,8 @@ export default function VenuesScreen() {
   const [distanceFilter, setDistanceFilter] = useState<number>(
     DISTANCE_OPTIONS[1]
   );
-  const [categoryFilter, setCategoryFilter] = useState<"All" | VenueCategory>(
-    "All"
+  const [categoryFilter, setCategoryFilter] = useState<("All" | VenueCategory)[]>(
+    ["All"]
   );
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -172,7 +171,9 @@ export default function VenuesScreen() {
 
   const filteredVenues = useMemo<VenueWithDistance[]>(() => {
     const categoryFiltered = venuesWithDistance.filter((v) =>
-      categoryFilter === "All" ? true : v.category === categoryFilter
+      categoryFilter.includes("All")
+        ? true
+        : v.categories.some((c) => categoryFilter.includes(c))
     );
 
     if (!userCoordinates) return categoryFiltered;
@@ -238,7 +239,7 @@ export default function VenuesScreen() {
         />
         <View style={styles.venueContent}>
           <Text style={styles.venueName}>{item.name}</Text>
-          <Text style={styles.venueMeta}>{item.category}</Text>
+          <Text style={styles.venueMeta}>{item.categories.join(", ")}</Text>
           <Text style={styles.venueMeta}>
             {[item.city, item.state].filter(Boolean).join(", ") ||
               item.address}
@@ -347,14 +348,25 @@ export default function VenuesScreen() {
                       key={cat}
                       style={[
                         styles.filterChip,
-                        categoryFilter === cat && styles.filterChipActive,
+                        categoryFilter.includes(cat) && styles.filterChipActive,
                       ]}
-                      onPress={() => setCategoryFilter(cat)}
+                      onPress={() => {
+                        if (cat === "All") {
+                          setCategoryFilter(["All"]);
+                        } else if (categoryFilter.includes(cat)) {
+                          const next = categoryFilter.filter((c) => c !== cat);
+                          setCategoryFilter(next.length === 0 ? ["All"] : next);
+                        } else {
+                          setCategoryFilter(
+                            categoryFilter.filter((c) => c !== "All").concat(cat)
+                          );
+                        }
+                      }}
                     >
                       <Text
                         style={[
                           styles.filterChipText,
-                          categoryFilter === cat && styles.filterChipTextActive,
+                          categoryFilter.includes(cat) && styles.filterChipTextActive,
                         ]}
                       >
                         {cat}

@@ -55,8 +55,8 @@ export default function MapScreen() {
   const [venues, setVenues] = useState<VenueProfile[]>([])
   const [actsLoading, setActsLoading] = useState(false)
   const [distanceFilter, setDistanceFilter] = useState<number>(DISTANCE_OPTIONS[1])
-  const [categoryFilter, setCategoryFilter] = useState<"All" | ActCategory>("All")
-  const [venueCategoryFilter, setVenueCategoryFilter] = useState<"All" | VenueCategory>("All")
+  const [categoryFilter, setCategoryFilter] = useState<("All" | ActCategory)[]>(["All"])
+  const [venueCategoryFilter, setVenueCategoryFilter] = useState<("All" | VenueCategory)[]>(["All"])
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Native driver handles opacity/transform; JS driver handles maxHeight (layout prop)
   const slideAnimNative = useRef(new Animated.Value(0)).current
@@ -148,7 +148,7 @@ export default function MapScreen() {
 
   const filteredActs = useMemo<ActWithDistance[]>(() => {
     const categoryFiltered = actsWithDistance.filter((act) =>
-      categoryFilter === "All" ? true : act.category === categoryFilter
+      categoryFilter.includes("All") ? true : categoryFilter.includes(act.category)
     )
     if (!userCoordinates) {
       return categoryFiltered
@@ -176,7 +176,9 @@ export default function MapScreen() {
 
   const filteredVenues = useMemo<VenueWithDistance[]>(() => {
     const categoryFiltered = venuesWithDistance.filter((v) =>
-      venueCategoryFilter === "All" ? true : v.category === venueCategoryFilter
+      venueCategoryFilter.includes("All")
+        ? true
+        : v.categories.some((c) => venueCategoryFilter.includes(c))
     )
     if (!userCoordinates) return categoryFiltered
     return categoryFiltered.filter(
@@ -282,7 +284,7 @@ export default function MapScreen() {
             style={{
               maxHeight: slideAnimJS.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, 200],
+                outputRange: [0, 400],
               }),
               overflow: "hidden",
             }}
@@ -341,14 +343,25 @@ export default function MapScreen() {
                             key={category}
                             style={[
                               styles.filterChip,
-                              categoryFilter === category && styles.filterChipActive,
+                              categoryFilter.includes(category) && styles.filterChipActive,
                             ]}
-                            onPress={() => setCategoryFilter(category)}
+                            onPress={() => {
+                              if (category === "All") {
+                                setCategoryFilter(["All"]);
+                              } else if (categoryFilter.includes(category)) {
+                                const next = categoryFilter.filter((c) => c !== category);
+                                setCategoryFilter(next.length === 0 ? ["All"] : next);
+                              } else {
+                                setCategoryFilter(
+                                  categoryFilter.filter((c) => c !== "All").concat(category)
+                                );
+                              }
+                            }}
                           >
                             <Text
                               style={[
                                 styles.filterChipText,
-                                categoryFilter === category && styles.filterChipTextActive,
+                                categoryFilter.includes(category) && styles.filterChipTextActive,
                               ]}
                             >
                               {category}
@@ -360,14 +373,25 @@ export default function MapScreen() {
                             key={category}
                             style={[
                               styles.filterChip,
-                              venueCategoryFilter === category && styles.filterChipActive,
+                              venueCategoryFilter.includes(category) && styles.filterChipActive,
                             ]}
-                            onPress={() => setVenueCategoryFilter(category)}
+                            onPress={() => {
+                              if (category === "All") {
+                                setVenueCategoryFilter(["All"]);
+                              } else if (venueCategoryFilter.includes(category)) {
+                                const next = venueCategoryFilter.filter((c) => c !== category);
+                                setVenueCategoryFilter(next.length === 0 ? ["All"] : next);
+                              } else {
+                                setVenueCategoryFilter(
+                                  venueCategoryFilter.filter((c) => c !== "All").concat(category)
+                                );
+                              }
+                            }}
                           >
                             <Text
                               style={[
                                 styles.filterChipText,
-                                venueCategoryFilter === category && styles.filterChipTextActive,
+                                venueCategoryFilter.includes(category) && styles.filterChipTextActive,
                               ]}
                             >
                               {category}

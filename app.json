@@ -20,7 +20,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.kevinrlutz.localacts"
+      "package": "com.kevinrlutz.localacts",
+      "versionCode": 1
     },
     "web": {
       "output": "static",
