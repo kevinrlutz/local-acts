@@ -30,6 +30,8 @@ export type ActEvent = {
   ticketLink?: string | null;
   eventDate: Date;
   hasTime?: boolean;
+  venueId?: string | null;
+  venueName?: string | null;
   createdAt?: Date | null;
   updatedAt?: Date | null;
 };
@@ -42,6 +44,8 @@ export type CreateActEventPayload = {
   /** Combined date and optional time as a Date object. */
   eventDate: Date;
   hasTime?: boolean;
+  venueId?: string | null;
+  venueName?: string | null;
 };
 
 export type CreateActProfilePayload = {

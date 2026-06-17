@@ -3,17 +3,17 @@ import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,12 +22,14 @@ import StageLights from "../src/components/StageLights";
 import { auth, storage } from "../src/lib/firebase";
 import { getAllActs } from "../src/services/acts";
 import {
-  getAppUserFromFirestore,
-  updateStageLightsPreference,
+    getAppUserFromFirestore,
+    updateStageLightsPreference,
 } from "../src/services/userProfile";
+import { getAllVenues } from "../src/services/venues";
 
 import type { ActCategory, ActProfile } from "@/src/types/acts";
 import { AppUser } from "@/src/types/auth";
+import type { VenueCategory, VenueProfile } from "@/src/types/venues";
 import Colors from "../src/Colors";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href
@@ -35,12 +37,23 @@ const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href
 const UPDATE_LOCATION_ROUTE = "/update-location" as Href
 const CREATE_ACT_ROUTE = "/act/create-act" as Href
 const ACT_PROFILE_ROUTE = "/act" as Href
+const CREATE_VENUE_ROUTE = "/venue/create-venue" as Href
+const VENUE_PROFILE_ROUTE = "/venue" as Href
+const MAP_ROUTE = "/map" as Href
 const PAGE_SIZE = 10
 const DISTANCE_OPTIONS = [10, 25, 50, 100]
-const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
+const ACT_CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
   "All",
   "Musician",
   "Comedian",
+  "Other",
+]
+const VENUE_CATEGORY_OPTIONS: ("All" | VenueCategory)[] = [
+  "All",
+  "Bar / Club",
+  "Concert Hall",
+  "Theater",
+  "Restaurant",
   "Other",
 ]
 const DESCRIPTION_PREVIEW_MAX_LENGTH = 60
@@ -49,6 +62,8 @@ const {width: screenWidth} = Dimensions.get("window")
 const isMobile = screenWidth < 768
 
 type ActWithDistance = ActProfile & {distanceInMiles: number | null}
+type VenueWithDistance = VenueProfile & {distanceInMiles: number | null}
+type ViewMode = "acts" | "venues"
 
 const EARTH_RADIUS_MILES = 3958.8
 
@@ -81,6 +96,15 @@ const formatActLocation = (act: ActProfile) => {
   return act.location?.formattedAddress ?? "Location unavailable"
 }
 
+const formatVenueLocation = (venue: VenueProfile) => {
+  const city = venue.city
+  const state = venue.state
+  if (city && state) {
+    return `${city}, ${state}`
+  }
+  return venue.address ?? "Location unavailable"
+}
+
 const formatActDescriptionPreview = (description?: string | null) => {
   if (!description) {
     return null
@@ -100,15 +124,26 @@ export default function Index() {
   const [user, setUser] = useState<User | null>(() => auth.currentUser)
   const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser)
   const [userProfile, setUserProfile] = useState<AppUser | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>("acts")
+  
+  // Acts state
   const [acts, setActs] = useState<ActProfile[]>([])
   const [actsLoading, setActsLoading] = useState(false)
   const [actsError, setActsError] = useState<string | null>(null)
   const [actImageUrls, setActImageUrls] = useState<Record<string, string>>({})
+  
+  // Venues state
+  const [venues, setVenues] = useState<VenueProfile[]>([])
+  const [venuesLoading, setVenuesLoading] = useState(false)
+  const [venuesError, setVenuesError] = useState<string | null>(null)
+  const [venueImageUrls, setVenueImageUrls] = useState<Record<string, string>>({})
+  
+  // Shared filters
   const [distanceFilter, setDistanceFilter] = useState<number>(
     DISTANCE_OPTIONS[1]
   )
-  const [categoryFilter, setCategoryFilter] = useState<"All" | ActCategory>(
-    "All"
+  const [categoryFilter, setCategoryFilter] = useState<("All" | ActCategory | VenueCategory)[]>(
+    ["All"]
   )
   const [currentPage, setCurrentPage] = useState(1)
   const [isMenuVisible, setIsMenuVisible] = useState(false)
@@ -188,15 +223,35 @@ export default function Index() {
     }
   }, [user])
 
+  const fetchVenues = useCallback(async () => {
+    if (!user) {
+      setVenues([])
+      return
+    }
+    setVenuesLoading(true)
+    setVenuesError(null)
+    try {
+      const allVenues = await getAllVenues()
+      setVenues(allVenues)
+    } catch (error) {
+      console.error("Failed to fetch venues:", error)
+      setVenuesError("Unable to load venues right now.")
+    } finally {
+      setVenuesLoading(false)
+    }
+  }, [user])
+
   useEffect(() => {
     fetchActs()
-  }, [fetchActs])
+    fetchVenues()
+  }, [fetchActs, fetchVenues])
 
   useFocusEffect(
     useCallback(() => {
       fetchActs()
+      fetchVenues()
       fetchProfile()
-    }, [fetchActs, fetchProfile])
+    }, [fetchActs, fetchVenues, fetchProfile])
   )
 
   useEffect(() => {
@@ -229,6 +284,35 @@ export default function Index() {
   }, [acts])
 
   useEffect(() => {
+    if (venues.length === 0) {
+      setVenueImageUrls({})
+      return
+    }
+    const fetchUrls = async () => {
+      const urls: Record<string, string> = {}
+      await Promise.all(
+        venues.map(async (venue) => {
+          if (venue.profileImageRef) {
+            try {
+              const url = await getDownloadURL(
+                ref(storage, venue.profileImageRef)
+              )
+              urls[venue.id] = url
+            } catch (error) {
+              console.error(
+                `Failed to fetch image URL for venue ${venue.id}:`,
+                error
+              )
+            }
+          }
+        })
+      )
+      setVenueImageUrls(urls)
+    }
+    fetchUrls()
+  }, [venues])
+
+  useEffect(() => {
     setCurrentPage(1)
   }, [distanceFilter, categoryFilter])
 
@@ -253,6 +337,16 @@ export default function Index() {
     router.push(CREATE_ACT_ROUTE)
   }
 
+  const goToVenue = () => {
+    if (userProfile?.hasVenueProfile && user?.uid) {
+      router.push(
+        `${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(user.uid)}` as Href
+      )
+      return
+    }
+    router.push(CREATE_VENUE_ROUTE)
+  }
+
   const userCoordinates = userProfile?.location?.coordinates
 
   const actsWithDistance = useMemo<ActWithDistance[]>(() => {
@@ -272,9 +366,26 @@ export default function Index() {
     })
   }, [acts, userCoordinates])
 
+  const venuesWithDistance = useMemo<VenueWithDistance[]>(() => {
+    return venues.map((venue) => {
+      if (userCoordinates && venue.coordinates) {
+        const {latitude: venueLat, longitude: venueLon} = venue.coordinates
+        const {latitude: userLat, longitude: userLon} = userCoordinates
+        const distance = calculateDistanceMiles(
+          userLat,
+          userLon,
+          venueLat,
+          venueLon
+        )
+        return {...venue, distanceInMiles: distance}
+      }
+      return {...venue, distanceInMiles: null}
+    })
+  }, [venues, userCoordinates])
+
   const filteredActs = useMemo(() => {
     const categoryFiltered = actsWithDistance.filter((act) =>
-      categoryFilter === "All" ? true : act.category === categoryFilter
+      categoryFilter.includes("All") ? true : categoryFilter.includes(act.category)
     )
 
     if (!userCoordinates) {
@@ -298,8 +409,37 @@ export default function Index() {
       })
   }, [actsWithDistance, categoryFilter, distanceFilter, userCoordinates])
 
-  const totalPages = Math.max(1, Math.ceil(filteredActs.length / PAGE_SIZE))
-  const paginatedActs = filteredActs.slice(
+  const filteredVenues = useMemo(() => {
+    const categoryFiltered = venuesWithDistance.filter((venue) =>
+      categoryFilter.includes("All")
+        ? true
+        : venue.categories.some((c) => categoryFilter.includes(c))
+    )
+
+    if (!userCoordinates) {
+      return categoryFiltered
+    }
+
+    return categoryFiltered
+      .filter(
+        (venue) =>
+          typeof venue.distanceInMiles === "number" &&
+          venue.distanceInMiles <= distanceFilter
+      )
+      .sort((a, b) => {
+        if (a.distanceInMiles === null) {
+          return 1
+        }
+        if (b.distanceInMiles === null) {
+          return -1
+        }
+        return a.distanceInMiles - b.distanceInMiles
+      })
+  }, [venuesWithDistance, categoryFilter, distanceFilter, userCoordinates])
+
+  const currentFilteredList = viewMode === "acts" ? filteredActs : filteredVenues
+  const totalPages = Math.max(1, Math.ceil(currentFilteredList.length / PAGE_SIZE))
+  const paginatedList = currentFilteredList.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   )
@@ -315,7 +455,7 @@ export default function Index() {
       const descriptionPreview = formatActDescriptionPreview(item.description)
       return (
         <Pressable
-          style={styles.actCard}
+          style={styles.card}
           onPress={() =>
             router.push(
               `${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}` as Href
@@ -328,18 +468,18 @@ export default function Index() {
                 ? {uri: actImageUrls[item.id]}
                 : require("@/assets/images/icon.png")
             }
-            style={styles.actImage}
+            style={styles.itemImage}
             accessibilityLabel={`${item.name} profile photo`}
           />
-          <View style={styles.actContent}>
-            <Text style={styles.actName}>{item.name}</Text>
-            <Text style={styles.actMeta}>{item.category}</Text>
-            <Text style={styles.actMeta}>{formatActLocation(item)}</Text>
+          <View style={styles.itemContent}>
+            <Text style={styles.itemName}>{item.name}</Text>
+            <Text style={styles.itemMeta}>{item.category}</Text>
+            <Text style={styles.itemMeta}>{formatActLocation(item)}</Text>
             {descriptionPreview ? (
-              <Text style={styles.actDescription}>{descriptionPreview}</Text>
+              <Text style={styles.itemDescription}>{descriptionPreview}</Text>
             ) : null}
             {typeof item.distanceInMiles === "number" && (
-              <Text style={styles.actDistance}>
+              <Text style={styles.itemDistance}>
                 {item.distanceInMiles.toFixed(1)} miles away
               </Text>
             )}
@@ -350,21 +490,57 @@ export default function Index() {
     [actImageUrls, router]
   )
 
-  const renderEmptyActs = useCallback(
+  const renderVenueItem = useCallback(
+    ({item}: {item: VenueWithDistance}) => (
+      <Pressable
+        style={styles.card}
+        onPress={() =>
+          router.push(
+            `${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}` as Href
+          )
+        }
+      >
+        <Image
+          source={
+            venueImageUrls[item.id]
+              ? {uri: venueImageUrls[item.id]}
+              : require("@/assets/images/icon.png")
+          }
+          style={styles.itemImage}
+          accessibilityLabel={`${item.name} profile photo`}
+        />
+        <View style={styles.itemContent}>
+          <Text style={styles.itemName}>{item.name}</Text>
+          <Text style={styles.itemMeta}>{item.categories.join(", ")}</Text>
+          <Text style={styles.itemMeta}>{formatVenueLocation(item)}</Text>
+          {typeof item.distanceInMiles === "number" && (
+            <Text style={styles.itemDistance}>
+              {item.distanceInMiles.toFixed(1)} miles away
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    ),
+    [venueImageUrls, router]
+  )
+
+  const renderEmpty = useCallback(
     () => (
       <View style={styles.emptyState}>
-        {actsLoading ? (
+        {viewMode === "acts" && actsLoading ? (
+          <ActivityIndicator color={Colors.secondaryAction} />
+        ) : viewMode === "venues" && venuesLoading ? (
           <ActivityIndicator color={Colors.secondaryAction} />
         ) : (
           <Text style={styles.emptyText}>
             {userCoordinates
-              ? "No acts match your current filters. Try expanding the distance or picking a different category."
-              : "Add a location to start discovering acts nearby."}
+              ? `No ${viewMode === "acts" ? "acts" : "venues"} match your current filters. Try expanding the distance or picking a different category.`
+              : `Add a location to start discovering ${viewMode === "acts" ? "acts" : "venues"} nearby.`}
           </Text>
         )}
       </View>
     ),
-    [actsLoading, userCoordinates]
+    [actsLoading, venuesLoading, userCoordinates, viewMode]
   )
 
   const advancePage = (delta: number) => {
@@ -386,6 +562,11 @@ export default function Index() {
   const handleMenuActPress = () => {
     closeMenu()
     goToAct()
+  }
+
+  const handleMenuVenuePress = () => {
+    closeMenu()
+    goToVenue()
   }
 
   const handleMenuSignOut = () => {
@@ -430,11 +611,11 @@ export default function Index() {
       }
     >
       {stageLightsEnabled && <StageLights />}
-      <FlatList
-        data={paginatedActs}
+      <FlatList<any>
+        data={paginatedList}
         keyExtractor={(item) => item.id}
-        renderItem={renderActItem}
-        ListEmptyComponent={renderEmptyActs}
+        renderItem={viewMode === "acts" ? renderActItem : renderVenueItem}
+        ListEmptyComponent={renderEmpty}
         ListHeaderComponent={
           <View style={styles.headerContainer}>
             <View style={styles.menuWrapper}>
@@ -459,7 +640,7 @@ export default function Index() {
               {user.displayName || user.email || "New Local Acts fan"}!
             </Text>
             <Text style={styles.subtitle}>
-              Currently discovering acts in {locationSummary}
+              Currently discovering {viewMode === "acts" ? "acts" : "venues"} in {locationSummary}
             </Text>
             <Pressable
               style={styles.primaryButton}
@@ -473,6 +654,73 @@ export default function Index() {
                   : "Finish Profile Setup"}
               </Text>
             </Pressable>
+            
+            {/* View Mode Toggle */}
+            <View style={styles.viewModeToggle}>
+              <Pressable
+                style={[
+                  styles.toggleButton,
+                  viewMode === "acts" && styles.toggleButtonActive,
+                ]}
+                onPress={() => {
+                  setViewMode("acts")
+                  setCurrentPage(1)
+                  setCategoryFilter(["All"])
+                }}
+              >
+                <Text
+                  style={[
+                    styles.toggleButtonText,
+                    viewMode === "acts" && styles.toggleButtonTextActive,
+                  ]}
+                >
+                  Acts
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.toggleButton,
+                  viewMode === "venues" && styles.toggleButtonActive,
+                ]}
+                onPress={() => {
+                  setViewMode("venues")
+                  setCurrentPage(1)
+                  setCategoryFilter(["All"])
+                }}
+              >
+                <Text
+                  style={[
+                    styles.toggleButtonText,
+                    viewMode === "venues" && styles.toggleButtonTextActive,
+                  ]}
+                >
+                  Venues
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.secondaryButtonRow}>
+              <Pressable
+                style={styles.halfButton}
+                onPress={() => router.push(MAP_ROUTE)}
+              >
+                <Text style={styles.secondaryButtonText}>Map View</Text>
+              </Pressable>
+              <Pressable
+                style={styles.halfButton}
+                onPress={viewMode === "acts" ? goToAct : goToVenue}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  {viewMode === "acts"
+                    ? userProfile?.hasActProfile
+                      ? "Manage Act"
+                      : "Create Act"
+                    : userProfile?.hasVenueProfile
+                    ? "Manage Venue"
+                    : "Create Venue"}
+                </Text>
+              </Pressable>
+            </View>
             <View style={styles.filtersWrapper}>
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Distance</Text>
@@ -505,19 +753,30 @@ export default function Index() {
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Category</Text>
                 <View style={styles.chipRow}>
-                  {CATEGORY_OPTIONS.map((category) => (
+                  {(viewMode === "acts" ? ACT_CATEGORY_OPTIONS : VENUE_CATEGORY_OPTIONS).map((category) => (
                     <Pressable
                       key={category}
                       style={[
                         styles.filterChip,
-                        categoryFilter === category && styles.filterChipActive,
+                        categoryFilter.includes(category) && styles.filterChipActive,
                       ]}
-                      onPress={() => setCategoryFilter(category)}
+                      onPress={() => {
+                        if (category === "All") {
+                          setCategoryFilter(["All"])
+                        } else if (categoryFilter.includes(category)) {
+                          const next = categoryFilter.filter((c) => c !== category)
+                          setCategoryFilter(next.length === 0 ? ["All"] : next)
+                        } else {
+                          setCategoryFilter(
+                            categoryFilter.filter((c) => c !== "All").concat(category)
+                          )
+                        }
+                      }}
                     >
                       <Text
                         style={[
                           styles.filterChipText,
-                          categoryFilter === category &&
+                          categoryFilter.includes(category) &&
                             styles.filterChipTextActive,
                         ]}
                       >
@@ -528,11 +787,15 @@ export default function Index() {
                 </View>
               </View>
             </View>
-            {actsError && <Text style={styles.errorText}>{actsError}</Text>}
+            {(viewMode === "acts" ? actsError : venuesError) && (
+              <Text style={styles.errorText}>
+                {viewMode === "acts" ? actsError : venuesError}
+              </Text>
+            )}
           </View>
         }
         ListFooterComponent={
-          filteredActs.length > 0 ? (
+          currentFilteredList.length > 0 ? (
             <View style={styles.footerContainer}>
               <View style={styles.pagination}>
                 <Pressable
@@ -564,7 +827,7 @@ export default function Index() {
           ) : null
         }
         contentContainerStyle={styles.listContent}
-        style={styles.actsList}
+        style={styles.listWrapper}
         showsVerticalScrollIndicator={false}
       />
 
@@ -574,10 +837,10 @@ export default function Index() {
         animationType="fade"
         onRequestClose={closeMenu}
       >
-        <View style={styles.menuBackdrop}>
+        <View style={[styles.menuBackdrop, Platform.OS !== 'web' && {paddingTop: 80}]}>
           <Pressable style={styles.menuScrim} onPress={closeMenu} />
           <View style={styles.menuCard}>
-            <Text style={styles.menuHeader}>Account</Text>
+            <Text style={styles.menuHeader}>{user.displayName || user.email}</Text>
             <Pressable style={styles.menuAction} onPress={handleMenuActPress}>
               <Text style={styles.menuActionText}>
                 {userProfile?.hasActProfile
@@ -585,16 +848,25 @@ export default function Index() {
                   : "Create Act Profile"}
               </Text>
             </Pressable>
-            <Pressable
-              style={styles.menuAction}
-              onPress={handleMenuToggleStageLights}
-            >
+            <Pressable style={styles.menuAction} onPress={handleMenuVenuePress}>
               <Text style={styles.menuActionText}>
-                {stageLightsEnabled
-                  ? "Turn Off Stage Lights"
-                  : "Turn On Stage Lights"}
+                {userProfile?.hasVenueProfile
+                  ? "Manage Venue Profile"
+                  : "Create Venue Profile"}
               </Text>
             </Pressable>
+            {Platform.OS === 'web' && (
+              <Pressable
+                style={styles.menuAction}
+                onPress={handleMenuToggleStageLights}
+              >
+                <Text style={styles.menuActionText}>
+                  {stageLightsEnabled
+                    ? "Turn Off Stage Lights"
+                    : "Turn On Stage Lights"}
+                </Text>
+              </Pressable>
+            )}
             <Pressable style={styles.menuAction} onPress={handleMenuSignOut}>
               <Text style={styles.menuActionText}>Sign out</Text>
             </Pressable>
@@ -671,6 +943,29 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
   },
+  secondaryButtonRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "90%",
+    maxWidth: 360,
+  },
+  halfButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  mapButton: {
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    width: "90%",
+    maxWidth: 360,
+  },
   secondaryButtonText: {
     color: Colors.primaryWhite,
     fontWeight: "600",
@@ -735,11 +1030,25 @@ const styles = StyleSheet.create({
     width: isMobile ? "100%" : "60%",
     alignSelf: "center",
   },
+  listWrapper: {
+    width: isMobile ? "100%" : "60%",
+    alignSelf: "center",
+  },
   listContent: {
     gap: 12,
     paddingBottom: 12,
   },
   actCard: {
+    backgroundColor: Colors.secondaryBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    padding: 16,
+    flexDirection: "row",
+    gap: 16,
+    alignItems: "center",
+  },
+  card: {
     backgroundColor: Colors.secondaryBackground,
     borderRadius: 16,
     borderWidth: 1,
@@ -755,7 +1064,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: Colors.contentBorder,
   },
+  itemImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 16,
+    backgroundColor: Colors.contentBorder,
+  },
   actContent: {
+    flex: 1,
+    gap: 4,
+  },
+  itemContent: {
     flex: 1,
     gap: 4,
   },
@@ -764,14 +1083,30 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
+  itemName: {
+    color: Colors.primaryWhite,
+    fontSize: 18,
+    fontWeight: "700",
+  },
   actMeta: {
+    color: Colors.secondaryGray,
+  },
+  itemMeta: {
     color: Colors.secondaryGray,
   },
   actDescription: {
     color: Colors.primaryWhite,
     fontSize: 13,
   },
+  itemDescription: {
+    color: Colors.primaryWhite,
+    fontSize: 13,
+  },
   actDistance: {
+    color: Colors.successGreen,
+    fontWeight: "600",
+  },
+  itemDistance: {
     color: Colors.successGreen,
     fontWeight: "600",
   },
@@ -845,5 +1180,32 @@ const styles = StyleSheet.create({
   menuActionText: {
     color: Colors.primaryWhite,
     fontWeight: "600",
+  },
+  viewModeToggle: {
+    flexDirection: "row",
+    gap: 8,
+    width: "90%",
+    maxWidth: 360,
+  },
+  toggleButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: Colors.secondaryBackground,
+  },
+  toggleButtonActive: {
+    backgroundColor: Colors.secondaryAction,
+    borderColor: Colors.secondaryAction,
+  },
+  toggleButtonText: {
+    color: Colors.primaryWhite,
+    fontWeight: "600",
+  },
+  toggleButtonTextActive: {
+    color: Colors.secondaryBackground,
+    fontWeight: "700",
   },
 })

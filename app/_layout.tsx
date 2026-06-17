@@ -34,9 +34,27 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="venue"
+            options={{
+              title: "Venue Profile",
+            }}
+          />
+          <Stack.Screen
             name="update-location"
             options={{
               title: "Update Location",
+            }}
+          />
+          <Stack.Screen
+            name="map"
+            options={{
+              title: "Map View",
+            }}
+          />
+          <Stack.Screen
+            name="venues"
+            options={{
+              title: "Venues",
             }}
           />
         </Stack>

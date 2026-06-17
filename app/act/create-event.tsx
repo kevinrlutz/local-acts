@@ -2,16 +2,16 @@ import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -19,7 +19,9 @@ import Colors from "@/src/Colors";
 import { auth } from "@/src/lib/firebase";
 import { parseEventDate, validateTicketUrl } from "@/src/lib/validationUtils";
 import { createActEvent, getActProfileById } from "@/src/services/acts";
+import { getVenuesForEventPicker } from "@/src/services/venues";
 import type { ActProfile } from "@/src/types/acts";
+import type { VenuePickerItem } from "@/src/types/venues";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACT_PROFILE_ROUTE = "/act" as Href;
@@ -42,6 +44,9 @@ export default function CreateEventScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [availableVenues, setAvailableVenues] = useState<VenuePickerItem[]>([]);
+  const [selectedVenue, setSelectedVenue] = useState<VenuePickerItem | null>(null);
+  const [venuePickerOpen, setVenuePickerOpen] = useState(false);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -89,6 +94,12 @@ export default function CreateEventScreen() {
 
     loadAct();
   }, [uid, user, router]);
+
+  useEffect(() => {
+    getVenuesForEventPicker()
+      .then(setAvailableVenues)
+      .catch((err) => console.error("Failed to load venues:", err));
+  }, []);
 
   const actName = useMemo(() => actProfile?.name ?? "", [actProfile?.name]);
 
@@ -147,6 +158,8 @@ export default function CreateEventScreen() {
         description: trimmedDescription || undefined,
         eventDate: parsedDate,
         hasTime,
+        venueId: selectedVenue?.id ?? null,
+        venueName: selectedVenue?.name ?? null,
       });
 
       router.replace((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(actProfile.id)}`) as Href);
@@ -258,6 +271,38 @@ export default function CreateEventScreen() {
               />
             </View>
 
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Venue (optional)</Text>
+              <Pressable
+                style={styles.input}
+                onPress={() => setVenuePickerOpen((v) => !v)}
+              >
+                <Text style={{ color: selectedVenue ? Colors.primaryWhite : Colors.secondaryGray }}>
+                  {selectedVenue ? `${selectedVenue.name} — ${selectedVenue.city}, ${selectedVenue.state}` : "Select a venue"}
+                </Text>
+              </Pressable>
+              {venuePickerOpen && (
+                <View style={styles.venuePicker}>
+                  <Pressable
+                    style={styles.venuePickerItem}
+                    onPress={() => { setSelectedVenue(null); setVenuePickerOpen(false); }}
+                  >
+                    <Text style={styles.venuePickerText}>None</Text>
+                  </Pressable>
+                  {availableVenues.map((v) => (
+                    <Pressable
+                      key={v.id}
+                      style={styles.venuePickerItem}
+                      onPress={() => { setSelectedVenue(v); setVenuePickerOpen(false); }}
+                    >
+                      <Text style={styles.venuePickerText}>{v.name}</Text>
+                      <Text style={styles.venuePickerMeta}>{v.address}{v.city ? `, ${v.city}` : ""}{v.state ? `, ${v.state}` : ""}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <Pressable
@@ -361,6 +406,28 @@ const styles = StyleSheet.create({
     color: Colors.secondaryBackground,
     fontWeight: "700",
     fontSize: 16,
+  },
+  venuePicker: {
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: Colors.secondaryBackground,
+  },
+  venuePickerItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.contentBorder,
+  },
+  venuePickerText: {
+    color: Colors.primaryWhite,
+    fontWeight: "600",
+  },
+  venuePickerMeta: {
+    color: Colors.secondaryGray,
+    fontSize: 12,
+    marginTop: 2,
   },
   centered: {
     flex: 1,

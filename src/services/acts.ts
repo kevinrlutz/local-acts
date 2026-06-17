@@ -39,6 +39,8 @@ const mapEventSnapshot = (actId: string, eventId: string, data: DocumentData): A
   ticketLink: (data.ticketLink as string | undefined) ?? null,
   eventDate: toDateOrNull(data.eventDate) ?? new Date(),
   hasTime: Boolean(data.hasTime),
+  venueId: (data.venueId as string | undefined) ?? null,
+  venueName: (data.venueName as string | undefined) ?? null,
   createdAt: toDateOrNull(data.createdAt),
   updatedAt: toDateOrNull(data.updatedAt),
 });
@@ -222,6 +224,13 @@ export const createActEvent = async (actId: string, payload: CreateActEventPaylo
     eventPayload.ticketLink = trimmedTicketLink;
   }
 
+  if (payload.venueId) {
+    eventPayload.venueId = payload.venueId;
+  }
+  if (payload.venueName) {
+    eventPayload.venueName = payload.venueName;
+  }
+
   const docRef = await addDoc(eventCollectionRef, eventPayload);
   return docRef.id;
 };
@@ -249,6 +258,9 @@ export const updateActEvent = async (actId: string, eventId: string, payload: Cr
 
   const trimmedTicketLink = ticketLink?.trim();
   updatePayload.ticketLink = trimmedTicketLink ? trimmedTicketLink : deleteField();
+
+  updatePayload.venueId = payload.venueId ?? deleteField();
+  updatePayload.venueName = payload.venueName ?? deleteField();
 
   await updateDoc(eventRef, updatePayload);
 };
