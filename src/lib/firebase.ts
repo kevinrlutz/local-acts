@@ -1,7 +1,13 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  getReactNativePersistence,
+  initializeAuth,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { Platform } from "react-native";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBZqxIIoEl5tIpb_XnhCu8qukDKGyfFWHM",
@@ -27,7 +33,15 @@ if (missingConfigValues.length > 0) {
 
 const app = initializeApp(firebaseConfig);
 
-const auth = getAuth(app);
+// On native platforms, Firebase Auth defaults to in-memory persistence unless
+// explicitly configured with AsyncStorage, which signs the user out every time
+// the app is closed. The web SDK persists to IndexedDB/localStorage by default,
+// so `getAuth` is sufficient there.
+const auth = Platform.OS === "web"
+  ? getAuth(app)
+  : initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
 const db = getFirestore(app, "local-acts");
 const storage = getStorage(app);
 export { auth, db, storage };
