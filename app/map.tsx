@@ -17,33 +17,25 @@ import { auth } from "../src/lib/firebase";
 import { calculateDistanceMiles } from "../src/lib/geoUtils";
 import { getAllActs } from "../src/services/acts";
 import { getAppUserFromFirestore } from "../src/services/userProfile";
-import { getAllVenues } from "../src/services/venues";
+import { getVenuePinsForArea } from "../src/services/venueCategorySearch";
+import { formatCategoryName } from "../src/services/venueDetailsCache";
 import type { ActCategory, ActProfile } from "../src/types/acts";
 import type { AppUser } from "../src/types/auth";
-import type { VenueCategory, VenueProfile } from "../src/types/venues";
+import type { VenuePin } from "../src/types/venues";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href
 const ACT_PROFILE_ROUTE = "/act" as Href
 const VENUE_PROFILE_ROUTE = "/venue" as Href
-const DISTANCE_OPTIONS = [10, 25, 50, 100]
+const DISTANCE_OPTIONS = [5, 10, 25]
 const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
   "All",
   "Musician",
   "Comedian",
   "Other",
 ]
-const VENUE_CATEGORY_OPTIONS: ("All" | VenueCategory)[] = [
-  "All",
-  "Bar / Club",
-  "Concert Hall",
-  "Theater",
-  "Restaurant",
-  "Other",
-]
 
 type MapMode = "acts" | "venues"
 type ActWithDistance = ActProfile & { distanceInMiles: number | null }
-type VenueWithDistance = VenueProfile & { distanceInMiles: number | null }
 
 export default function MapScreen() {
   const router = useRouter()
@@ -52,11 +44,12 @@ export default function MapScreen() {
   const [userProfile, setUserProfile] = useState<AppUser | null>(null)
   const [mapMode, setMapMode] = useState<MapMode>("acts")
   const [acts, setActs] = useState<ActProfile[]>([])
-  const [venues, setVenues] = useState<VenueProfile[]>([])
+  const [venues, setVenues] = useState<VenuePin[]>([])
   const [actsLoading, setActsLoading] = useState(false)
+  const [venuesLoading, setVenuesLoading] = useState(false)
   const [distanceFilter, setDistanceFilter] = useState<number>(DISTANCE_OPTIONS[1])
   const [categoryFilter, setCategoryFilter] = useState<("All" | ActCategory)[]>(["All"])
-  const [venueCategoryFilter, setVenueCategoryFilter] = useState<("All" | VenueCategory)[]>(["All"])
+  const [venueCategoryFilter, setVenueCategoryFilter] = useState<string[]>(["All"])
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Native driver handles opacity/transform; JS driver handles maxHeight (layout prop)
   const slideAnimNative = useRef(new Animated.Value(0)).current
@@ -115,20 +108,28 @@ export default function MapScreen() {
   }, [user])
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !userProfile?.location?.coordinates) {
       setVenues([])
       return
     }
-    const fetchVenues = async () => {
-      try {
-        const allVenues = await getAllVenues()
-        setVenues(allVenues)
-      } catch (error) {
-        console.error("Failed to fetch venues:", error)
-      }
+    const { latitude, longitude } = userProfile.location.coordinates
+    let isCancelled = false
+    setVenuesLoading(true)
+    getVenuePinsForArea({ latitude, longitude, radiusMiles: distanceFilter })
+      .then((pins) => {
+        if (!isCancelled) setVenues(pins)
+      })
+      .catch((error) => {
+        console.error("Failed to fetch venue pins:", error)
+        if (!isCancelled) setVenues([])
+      })
+      .finally(() => {
+        if (!isCancelled) setVenuesLoading(false)
+      })
+    return () => {
+      isCancelled = true
     }
-    void fetchVenues()
-  }, [user])
+  }, [user, userProfile?.location?.coordinates, distanceFilter])
 
   const userCoordinates = userProfile?.location?.coordinates
 
@@ -160,33 +161,22 @@ export default function MapScreen() {
     )
   }, [actsWithDistance, categoryFilter, distanceFilter, userCoordinates])
 
-  const venuesWithDistance = useMemo<VenueWithDistance[]>(() => {
-    return venues.map((venue) => {
-      if (userCoordinates) {
-        const { latitude: vLat, longitude: vLon } = venue.coordinates
-        const { latitude: uLat, longitude: uLon } = userCoordinates
-        return {
-          ...venue,
-          distanceInMiles: calculateDistanceMiles(uLat, uLon, vLat, vLon),
-        }
-      }
-      return { ...venue, distanceInMiles: null }
-    })
-  }, [venues, userCoordinates])
+  const venuesWithDistance = useMemo<VenuePin[]>(() => venues, [venues])
 
-  const filteredVenues = useMemo<VenueWithDistance[]>(() => {
-    const categoryFiltered = venuesWithDistance.filter((v) =>
-      venueCategoryFilter.includes("All")
-        ? true
-        : v.categories.some((c) => venueCategoryFilter.includes(c))
-    )
-    if (!userCoordinates) return categoryFiltered
-    return categoryFiltered.filter(
-      (v) =>
-        typeof v.distanceInMiles === "number" &&
-        v.distanceInMiles <= distanceFilter
-    )
-  }, [venuesWithDistance, venueCategoryFilter, distanceFilter, userCoordinates])
+  const venueCategoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(venues.map((v) => v.category))).sort()
+    return ["All", ...unique]
+  }, [venues])
+
+  const filteredVenues = useMemo<VenuePin[]>(
+    () =>
+      venuesWithDistance.filter((venue) =>
+        venueCategoryFilter.includes("All")
+          ? true
+          : venueCategoryFilter.includes(venue.category)
+      ),
+    [venuesWithDistance, venueCategoryFilter]
+  )
 
   const toggleFilters = () => {
     const toValue = filtersOpen ? 0 : 1
@@ -213,8 +203,8 @@ export default function MapScreen() {
   )
 
   const handleVenuePinPress = useCallback(
-    (venueId: string) => {
-      router.push(`${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(venueId)}` as Href)
+    (venueMapboxId: string) => {
+      router.push(`${VENUE_PROFILE_ROUTE}?mapboxId=${encodeURIComponent(venueMapboxId)}` as Href)
     },
     [router]
   )
@@ -333,80 +323,88 @@ export default function MapScreen() {
                   </View>
                 </View>
 
-                {/* Category row */}
-                <View style={styles.filterRow}>
-                  <Text style={styles.filterLabel}>Category</Text>
-                  <View style={styles.chipRow}>
-                    {mapMode === "acts"
-                      ? CATEGORY_OPTIONS.map((category) => (
-                          <Pressable
-                            key={category}
+                {/* Category row — act categories are a fixed enum; venue
+                    categories come live from Mapbox pins currently loaded. */}
+                {mapMode === "acts" ? (
+                  <View style={styles.filterRow}>
+                    <Text style={styles.filterLabel}>Category</Text>
+                    <View style={styles.chipRow}>
+                      {CATEGORY_OPTIONS.map((category) => (
+                        <Pressable
+                          key={category}
+                          style={[
+                            styles.filterChip,
+                            categoryFilter.includes(category) && styles.filterChipActive,
+                          ]}
+                          onPress={() => {
+                            if (category === "All") {
+                              setCategoryFilter(["All"]);
+                            } else if (categoryFilter.includes(category)) {
+                              const next = categoryFilter.filter((c) => c !== category);
+                              setCategoryFilter(next.length === 0 ? ["All"] : next);
+                            } else {
+                              setCategoryFilter(
+                                categoryFilter.filter((c) => c !== "All").concat(category)
+                              );
+                            }
+                          }}
+                        >
+                          <Text
                             style={[
-                              styles.filterChip,
-                              categoryFilter.includes(category) && styles.filterChipActive,
+                              styles.filterChipText,
+                              categoryFilter.includes(category) && styles.filterChipTextActive,
                             ]}
-                            onPress={() => {
-                              if (category === "All") {
-                                setCategoryFilter(["All"]);
-                              } else if (categoryFilter.includes(category)) {
-                                const next = categoryFilter.filter((c) => c !== category);
-                                setCategoryFilter(next.length === 0 ? ["All"] : next);
-                              } else {
-                                setCategoryFilter(
-                                  categoryFilter.filter((c) => c !== "All").concat(category)
-                                );
-                              }
-                            }}
                           >
-                            <Text
-                              style={[
-                                styles.filterChipText,
-                                categoryFilter.includes(category) && styles.filterChipTextActive,
-                              ]}
-                            >
-                              {category}
-                            </Text>
-                          </Pressable>
-                        ))
-                      : VENUE_CATEGORY_OPTIONS.map((category) => (
-                          <Pressable
-                            key={category}
-                            style={[
-                              styles.filterChip,
-                              venueCategoryFilter.includes(category) && styles.filterChipActive,
-                            ]}
-                            onPress={() => {
-                              if (category === "All") {
-                                setVenueCategoryFilter(["All"]);
-                              } else if (venueCategoryFilter.includes(category)) {
-                                const next = venueCategoryFilter.filter((c) => c !== category);
-                                setVenueCategoryFilter(next.length === 0 ? ["All"] : next);
-                              } else {
-                                setVenueCategoryFilter(
-                                  venueCategoryFilter.filter((c) => c !== "All").concat(category)
-                                );
-                              }
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.filterChipText,
-                                venueCategoryFilter.includes(category) && styles.filterChipTextActive,
-                              ]}
-                            >
-                              {category}
-                            </Text>
-                          </Pressable>
-                        ))}
+                            {category}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
                   </View>
-                </View>
+                ) : (
+                  <View style={styles.filterRow}>
+                    <Text style={styles.filterLabel}>Category</Text>
+                    <View style={styles.chipRow}>
+                      {venueCategoryOptions.map((category) => (
+                        <Pressable
+                          key={category}
+                          style={[
+                            styles.filterChip,
+                            venueCategoryFilter.includes(category) && styles.filterChipActive,
+                          ]}
+                          onPress={() => {
+                            if (category === "All") {
+                              setVenueCategoryFilter(["All"]);
+                            } else if (venueCategoryFilter.includes(category)) {
+                              const next = venueCategoryFilter.filter((c) => c !== category);
+                              setVenueCategoryFilter(next.length === 0 ? ["All"] : next);
+                            } else {
+                              setVenueCategoryFilter(
+                                venueCategoryFilter.filter((c) => c !== "All").concat(category)
+                              );
+                            }
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.filterChipText,
+                              venueCategoryFilter.includes(category) && styles.filterChipTextActive,
+                            ]}
+                          >
+                            {category === "All" ? "All" : formatCategoryName(category)}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                )}
               </View>
             </Animated.View>
           </Animated.View>
         </View>
       </View>
 
-      {actsLoading && (
+      {(actsLoading || venuesLoading) && (
         <View style={styles.loadingOverlay} pointerEvents="none">
           <ActivityIndicator color={Colors.secondaryAction} />
         </View>
@@ -523,6 +521,10 @@ const styles = StyleSheet.create({
   },
   filterChipTextDisabled: {
     color: Colors.secondaryGray,
+  },
+  filterHelperText: {
+    color: Colors.secondaryGray,
+    fontSize: 12,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

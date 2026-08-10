@@ -3,7 +3,7 @@ import React, { useMemo } from "react";
 import { StyleSheet } from "react-native";
 import Colors from "../Colors";
 import type { ActProfile } from "../types/acts";
-import type { VenueProfile } from "../types/venues";
+import type { VenuePin } from "../types/venues";
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "")
 
@@ -14,8 +14,8 @@ export type ActMapProps = {
   acts: ActProfile[]
   userCoordinates?: { latitude: number; longitude: number } | null
   onPinPress: (actId: string) => void
-  venues?: VenueProfile[]
-  onVenuePinPress?: (venueId: string) => void
+  venues?: VenuePin[]
+  onVenuePinPress?: (venueMapboxId: string) => void
 }
 
 export default function ActMap({ acts, userCoordinates, onPinPress, venues = [], onVenuePinPress }: ActMapProps) {
@@ -50,7 +50,7 @@ export default function ActMap({ acts, userCoordinates, onPinPress, venues = [],
       type: "FeatureCollection" as const,
       features: venues.map((venue) => ({
         type: "Feature" as const,
-        id: venue.id,
+        id: venue.mapboxId,
         geometry: {
           type: "Point" as const,
           coordinates: [
@@ -58,7 +58,7 @@ export default function ActMap({ acts, userCoordinates, onPinPress, venues = [],
             venue.coordinates.latitude,
           ] as [number, number],
         },
-        properties: { id: venue.id, name: venue.name },
+        properties: { id: venue.mapboxId, name: venue.name },
       })),
     }),
     [venues]

@@ -70,7 +70,7 @@ export default function ActMap({ acts, userCoordinates, onPinPress, venues = [],
         ))}
       {venues.map((venue) => (
         <Marker
-          key={venue.id}
+          key={venue.mapboxId}
           longitude={venue.coordinates.longitude}
           latitude={venue.coordinates.latitude}
         >
@@ -86,7 +86,7 @@ export default function ActMap({ acts, userCoordinates, onPinPress, venues = [],
             title={venue.name}
             onClick={(e) => {
               e.stopPropagation()
-              onVenuePinPress?.(venue.id)
+              onVenuePinPress?.(venue.mapboxId)
             }}
           />
         </Marker>

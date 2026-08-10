@@ -2,28 +2,30 @@ import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Linking,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
 import { auth, storage } from "@/src/lib/firebase";
-import { deleteActEvent, getActEvents, getActProfileById } from "@/src/services/acts";
+import { getActProfileById } from "@/src/services/acts";
+import { deleteEvent, getEventsForAct } from "@/src/services/events";
 import type { ActEvent, ActProfile } from "@/src/types/acts";
 import { getDownloadURL, ref } from "firebase/storage";
 
 const EDIT_ACT_ROUTE = "/act/edit-act" as Href;
 const CREATE_EVENT_ROUTE = "/act/create-event" as Href;
 const EDIT_EVENT_ROUTE = "/act/edit-event" as Href;
+const VENUE_PROFILE_ROUTE = "/venue" as Href;
 
 const SOCIAL_LINK_LABELS: Partial<Record<keyof NonNullable<ActProfile["links"]>, string>> = {
   spotify: "Spotify",
@@ -114,7 +116,7 @@ export default function ActProfileScreen() {
       }
       try {
         setIsEventsLoading(true);
-        const nextEvents = await getActEvents(actUid);
+        const nextEvents = await getEventsForAct(actUid);
         if (isMounted) {
           setEvents(nextEvents);
         }
@@ -196,7 +198,7 @@ export default function ActProfileScreen() {
     }
 
     try {
-      await deleteActEvent(actProfile.id, eventId);
+      await deleteEvent(eventId);
       setEvents((prev) => prev?.filter((event) => event.id !== eventId) ?? []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to delete event.";
@@ -335,6 +337,20 @@ export default function ActProfileScreen() {
                         onPress={() => handleOpenLink(event.ticketLink!)}
                       >
                         <Text style={styles.ticketButtonText}>Get Tickets</Text>
+                      </Pressable>
+                    ) : null}
+                    {event.venueMapboxId ? (
+                      <Pressable
+                        style={styles.ticketButton}
+                        onPress={() =>
+                          router.push(
+                            `${VENUE_PROFILE_ROUTE}?mapboxId=${encodeURIComponent(
+                              event.venueMapboxId!
+                            )}` as Href
+                          )
+                        }
+                      >
+                        <Text style={styles.ticketButtonText}>View Venue</Text>
                       </Pressable>
                     ) : null}
                   </View>

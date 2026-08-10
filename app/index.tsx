@@ -3,17 +3,17 @@ import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    Image,
-    Modal,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,38 +22,30 @@ import StageLights from "../src/components/StageLights";
 import { auth, storage } from "../src/lib/firebase";
 import { getAllActs } from "../src/services/acts";
 import {
-    getAppUserFromFirestore,
-    updateStageLightsPreference,
+  getAppUserFromFirestore,
+  updateStageLightsPreference,
 } from "../src/services/userProfile";
-import { getAllVenues } from "../src/services/venues";
+import { getVenuePinsForArea } from "../src/services/venueCategorySearch";
 
 import type { ActCategory, ActProfile } from "@/src/types/acts";
 import { AppUser } from "@/src/types/auth";
-import type { VenueCategory, VenueProfile } from "@/src/types/venues";
+import type { VenuePin } from "@/src/types/venues";
 import Colors from "../src/Colors";
+import { formatCategoryName } from '@/src/services/venueDetailsCache';
 
 const LOGIN_ROUTE = "/(auth)/login" as Href
 const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href
 const UPDATE_LOCATION_ROUTE = "/update-location" as Href
 const CREATE_ACT_ROUTE = "/act/create-act" as Href
 const ACT_PROFILE_ROUTE = "/act" as Href
-const CREATE_VENUE_ROUTE = "/venue/create-venue" as Href
 const VENUE_PROFILE_ROUTE = "/venue" as Href
 const MAP_ROUTE = "/map" as Href
 const PAGE_SIZE = 10
-const DISTANCE_OPTIONS = [10, 25, 50, 100]
+const DISTANCE_OPTIONS = [5, 10, 25]
 const ACT_CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
   "All",
   "Musician",
   "Comedian",
-  "Other",
-]
-const VENUE_CATEGORY_OPTIONS: ("All" | VenueCategory)[] = [
-  "All",
-  "Bar / Club",
-  "Concert Hall",
-  "Theater",
-  "Restaurant",
   "Other",
 ]
 const DESCRIPTION_PREVIEW_MAX_LENGTH = 60
@@ -62,7 +54,7 @@ const {width: screenWidth} = Dimensions.get("window")
 const isMobile = screenWidth < 768
 
 type ActWithDistance = ActProfile & {distanceInMiles: number | null}
-type VenueWithDistance = VenueProfile & {distanceInMiles: number | null}
+type VenueWithDistance = VenuePin & {distanceInMiles: number | null}
 type ViewMode = "acts" | "venues"
 
 const EARTH_RADIUS_MILES = 3958.8
@@ -96,15 +88,6 @@ const formatActLocation = (act: ActProfile) => {
   return act.location?.formattedAddress ?? "Location unavailable"
 }
 
-const formatVenueLocation = (venue: VenueProfile) => {
-  const city = venue.city
-  const state = venue.state
-  if (city && state) {
-    return `${city}, ${state}`
-  }
-  return venue.address ?? "Location unavailable"
-}
-
 const formatActDescriptionPreview = (description?: string | null) => {
   if (!description) {
     return null
@@ -133,16 +116,15 @@ export default function Index() {
   const [actImageUrls, setActImageUrls] = useState<Record<string, string>>({})
   
   // Venues state
-  const [venues, setVenues] = useState<VenueProfile[]>([])
+  const [venues, setVenues] = useState<VenuePin[]>([])
   const [venuesLoading, setVenuesLoading] = useState(false)
   const [venuesError, setVenuesError] = useState<string | null>(null)
-  const [venueImageUrls, setVenueImageUrls] = useState<Record<string, string>>({})
   
   // Shared filters
   const [distanceFilter, setDistanceFilter] = useState<number>(
     DISTANCE_OPTIONS[1]
   )
-  const [categoryFilter, setCategoryFilter] = useState<("All" | ActCategory | VenueCategory)[]>(
+  const [categoryFilter, setCategoryFilter] = useState<string[]>(
     ["All"]
   )
   const [currentPage, setCurrentPage] = useState(1)
@@ -224,22 +206,27 @@ export default function Index() {
   }, [user])
 
   const fetchVenues = useCallback(async () => {
-    if (!user) {
+    const coordinates = userProfile?.location?.coordinates
+    if (!user || !coordinates) {
       setVenues([])
       return
     }
     setVenuesLoading(true)
     setVenuesError(null)
     try {
-      const allVenues = await getAllVenues()
-      setVenues(allVenues)
+      const pins = await getVenuePinsForArea({
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+        radiusMiles: distanceFilter,
+      })
+      setVenues(pins)
     } catch (error) {
       console.error("Failed to fetch venues:", error)
       setVenuesError("Unable to load venues right now.")
     } finally {
       setVenuesLoading(false)
     }
-  }, [user])
+  }, [user, userProfile?.location?.coordinates, distanceFilter])
 
   useEffect(() => {
     fetchActs()
@@ -284,35 +271,6 @@ export default function Index() {
   }, [acts])
 
   useEffect(() => {
-    if (venues.length === 0) {
-      setVenueImageUrls({})
-      return
-    }
-    const fetchUrls = async () => {
-      const urls: Record<string, string> = {}
-      await Promise.all(
-        venues.map(async (venue) => {
-          if (venue.profileImageRef) {
-            try {
-              const url = await getDownloadURL(
-                ref(storage, venue.profileImageRef)
-              )
-              urls[venue.id] = url
-            } catch (error) {
-              console.error(
-                `Failed to fetch image URL for venue ${venue.id}:`,
-                error
-              )
-            }
-          }
-        })
-      )
-      setVenueImageUrls(urls)
-    }
-    fetchUrls()
-  }, [venues])
-
-  useEffect(() => {
     setCurrentPage(1)
   }, [distanceFilter, categoryFilter])
 
@@ -338,13 +296,7 @@ export default function Index() {
   }
 
   const goToVenue = () => {
-    if (userProfile?.hasVenueProfile && user?.uid) {
-      router.push(
-        `${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(user.uid)}` as Href
-      )
-      return
-    }
-    router.push(CREATE_VENUE_ROUTE)
+    router.push("/venues" as Href)
   }
 
   const userCoordinates = userProfile?.location?.coordinates
@@ -411,9 +363,7 @@ export default function Index() {
 
   const filteredVenues = useMemo(() => {
     const categoryFiltered = venuesWithDistance.filter((venue) =>
-      categoryFilter.includes("All")
-        ? true
-        : venue.categories.some((c) => categoryFilter.includes(c))
+      categoryFilter.includes("All") ? true : categoryFilter.includes(venue.category)
     )
 
     if (!userCoordinates) {
@@ -437,6 +387,11 @@ export default function Index() {
       })
   }, [venuesWithDistance, categoryFilter, distanceFilter, userCoordinates])
 
+  const currentCategoryOptions = useMemo(() => {
+    if (viewMode === "acts") return ACT_CATEGORY_OPTIONS
+    const unique = Array.from(new Set(venues.map((v) => v.category))).sort()
+    return ["All", ...unique]
+  }, [viewMode, venues])
   const currentFilteredList = viewMode === "acts" ? filteredActs : filteredVenues
   const totalPages = Math.max(1, Math.ceil(currentFilteredList.length / PAGE_SIZE))
   const paginatedList = currentFilteredList.slice(
@@ -473,7 +428,7 @@ export default function Index() {
           />
           <View style={styles.itemContent}>
             <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemMeta}>{item.category}</Text>
+            <Text style={styles.itemMeta}>{formatCategoryName(item.category)}</Text>
             <Text style={styles.itemMeta}>{formatActLocation(item)}</Text>
             {descriptionPreview ? (
               <Text style={styles.itemDescription}>{descriptionPreview}</Text>
@@ -496,23 +451,13 @@ export default function Index() {
         style={styles.card}
         onPress={() =>
           router.push(
-            `${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}` as Href
+            `${VENUE_PROFILE_ROUTE}?mapboxId=${encodeURIComponent(item.mapboxId)}` as Href
           )
         }
       >
-        <Image
-          source={
-            venueImageUrls[item.id]
-              ? {uri: venueImageUrls[item.id]}
-              : require("@/assets/images/icon.png")
-          }
-          style={styles.itemImage}
-          accessibilityLabel={`${item.name} profile photo`}
-        />
         <View style={styles.itemContent}>
           <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemMeta}>{item.categories.join(", ")}</Text>
-          <Text style={styles.itemMeta}>{formatVenueLocation(item)}</Text>
+          <Text style={styles.itemMeta}>{formatCategoryName(item.category)}</Text>
           {typeof item.distanceInMiles === "number" && (
             <Text style={styles.itemDistance}>
               {item.distanceInMiles.toFixed(1)} miles away
@@ -521,7 +466,7 @@ export default function Index() {
         </View>
       </Pressable>
     ),
-    [venueImageUrls, router]
+    [router]
   )
 
   const renderEmpty = useCallback(
@@ -613,7 +558,7 @@ export default function Index() {
       {stageLightsEnabled && <StageLights />}
       <FlatList<any>
         data={paginatedList}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => (viewMode === "acts" ? item.id : item.mapboxId)}
         renderItem={viewMode === "acts" ? renderActItem : renderVenueItem}
         ListEmptyComponent={renderEmpty}
         ListHeaderComponent={
@@ -715,9 +660,7 @@ export default function Index() {
                     ? userProfile?.hasActProfile
                       ? "Manage Act"
                       : "Create Act"
-                    : userProfile?.hasVenueProfile
-                    ? "Manage Venue"
-                    : "Create Venue"}
+                    : "Browse Venues"}
                 </Text>
               </Pressable>
             </View>
@@ -753,7 +696,7 @@ export default function Index() {
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Category</Text>
                 <View style={styles.chipRow}>
-                  {(viewMode === "acts" ? ACT_CATEGORY_OPTIONS : VENUE_CATEGORY_OPTIONS).map((category) => (
+                  {(viewMode === "acts" ? ACT_CATEGORY_OPTIONS : currentCategoryOptions).map((category) => (
                     <Pressable
                       key={category}
                       style={[
@@ -780,7 +723,7 @@ export default function Index() {
                             styles.filterChipTextActive,
                         ]}
                       >
-                        {category}
+                        {formatCategoryName(category)}
                       </Text>
                     </Pressable>
                   ))}
@@ -849,11 +792,7 @@ export default function Index() {
               </Text>
             </Pressable>
             <Pressable style={styles.menuAction} onPress={handleMenuVenuePress}>
-              <Text style={styles.menuActionText}>
-                {userProfile?.hasVenueProfile
-                  ? "Manage Venue Profile"
-                  : "Create Venue Profile"}
-              </Text>
+              <Text style={styles.menuActionText}>Browse Venues</Text>
             </Pressable>
             {Platform.OS === 'web' && (
               <Pressable
