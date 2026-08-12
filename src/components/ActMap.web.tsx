@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import Map, { Marker, NavigationControl } from "react-map-gl";
-import type { ActMapProps } from "./ActMap";
+import type { EventMapProps } from "./ActMap";
 
 const TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? ""
 const DEFAULT_VIEW_STATE = { longitude: -98.35, latitude: 39.5, zoom: 4 }
 
 type ViewState = { longitude: number; latitude: number; zoom: number }
 
-export default function ActMap({ acts, userCoordinates, onPinPress, venues = [], onVenuePinPress }: ActMapProps) {
+export default function ActMap({ events, userCoordinates, onPinPress }: EventMapProps) {
   const [viewState, setViewState] = useState<ViewState>(() =>
     userCoordinates
       ? { longitude: userCoordinates.longitude, latitude: userCoordinates.latitude, zoom: 10 }
@@ -43,54 +43,31 @@ export default function ActMap({ acts, userCoordinates, onPinPress, venues = [],
       mapStyle="mapbox://styles/mapbox/dark-v11"
     >
       <NavigationControl position="top-left" />
-      {acts
-        .filter((act) => act.location?.coordinates)
-        .map((act) => (
+      {events
+        .filter((event) => event.venueCoordinates)
+        .map((event) => (
           <Marker
-            key={act.id}
-            longitude={act.location.coordinates.longitude}
-            latitude={act.location.coordinates.latitude}
+            key={event.id}
+            longitude={event.venueCoordinates!.longitude}
+            latitude={event.venueCoordinates!.latitude}
           >
             <div
               style={{
-                width: 20,
-                height: 20,
+                width: 15,
+                height: 15,
                 borderRadius: "50%",
-                backgroundColor: "#BB86FC",
+                backgroundColor: "#15b2c7",
                 border: "2px solid #F5F5F5",
                 cursor: "pointer",
               }}
-              title={act.name}
+              title={event.title}
               onClick={(e) => {
                 e.stopPropagation()
-                onPinPress(act.id)
+                onPinPress(event.id)
               }}
             />
           </Marker>
         ))}
-      {venues.map((venue) => (
-        <Marker
-          key={venue.id}
-          longitude={venue.coordinates.longitude}
-          latitude={venue.coordinates.latitude}
-        >
-          <div
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: "50%",
-              backgroundColor: "#03DAC6",
-              border: "2px solid #F5F5F5",
-              cursor: "pointer",
-            }}
-            title={venue.name}
-            onClick={(e) => {
-              e.stopPropagation()
-              onVenuePinPress?.(venue.id)
-            }}
-          />
-        </Marker>
-      ))}
     </Map>
   )
 }

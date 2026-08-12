@@ -1,12 +1,10 @@
 import { Href, useFocusEffect, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { getDownloadURL, ref } from "firebase/storage";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Dimensions,
     FlatList,
-    Image,
     Platform,
     Pressable,
     StyleSheet,
@@ -16,53 +14,37 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
-import { auth, storage } from "@/src/lib/firebase";
+import { auth } from "@/src/lib/firebase";
 import { calculateDistanceMiles } from "@/src/lib/geoUtils";
 import { getAppUserFromFirestore } from "@/src/services/userProfile";
-import { getAllVenues } from "@/src/services/venues";
+import { getVenuePinsForArea } from "@/src/services/venueCategorySearch";
+import { formatCategoryName } from "@/src/services/venueDetailsCache";
 import type { AppUser } from "@/src/types/auth";
-import type {
-    VenueCategory,
-    VenueProfile,
-} from "@/src/types/venues";
+import type { VenuePin } from "@/src/types/venues";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href;
-const CREATE_VENUE_ROUTE = "/venue/create-venue" as Href;
 const VENUE_PROFILE_ROUTE = "/venue" as Href;
 
-const DISTANCE_OPTIONS = [10, 25, 50, 100];
-const CATEGORY_OPTIONS: ("All" | VenueCategory)[] = [
-  "All",
-  "Bar / Club",
-  "Concert Hall",
-  "Theater",
-  "Restaurant",
-  "Other",
-];
+const DISTANCE_OPTIONS = [5, 10, 25];
 const PAGE_SIZE = 10;
 
 const { width: screenWidth } = Dimensions.get("window");
 const isMobile = screenWidth < 768;
 
-type VenueWithDistance = VenueProfile & { distanceInMiles: number | null };
+type VenuePinWithDistance = VenuePin & { distanceInMiles: number | null };
 
 export default function VenuesScreen() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser);
   const [userProfile, setUserProfile] = useState<AppUser | null>(null);
-  const [venues, setVenues] = useState<VenueProfile[]>([]);
+  const [venues, setVenues] = useState<VenuePin[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
   const [venuesError, setVenuesError] = useState<string | null>(null);
-  const [venueImageUrls, setVenueImageUrls] = useState<
-    Record<string, string>
-  >({});
   const [distanceFilter, setDistanceFilter] = useState<number>(
     DISTANCE_OPTIONS[1]
   );
-  const [categoryFilter, setCategoryFilter] = useState<("All" | VenueCategory)[]>(
-    ["All"]
-  );
+  const [categoryFilter, setCategoryFilter] = useState<string[]>(["All"]);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
@@ -93,69 +75,54 @@ export default function VenuesScreen() {
     }
   }, [user]);
 
+  const userCoordinates = userProfile?.location?.coordinates;
+
   const fetchVenues = useCallback(async () => {
-    if (!user) {
+    if (!user || !userCoordinates) {
       setVenues([]);
       return;
     }
     setVenuesLoading(true);
     setVenuesError(null);
     try {
-      const all = await getAllVenues();
-      setVenues(all);
+      const pins = await getVenuePinsForArea({
+        latitude: userCoordinates.latitude,
+        longitude: userCoordinates.longitude,
+        radiusMiles: distanceFilter,
+      });
+      setVenues(pins);
     } catch (error) {
       console.error("Failed to fetch venues:", error);
       setVenuesError("Unable to load venues right now.");
     } finally {
       setVenuesLoading(false);
     }
-  }, [user]);
+  }, [user, userCoordinates, distanceFilter]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   useEffect(() => {
     fetchVenues();
-    fetchProfile();
-  }, [fetchVenues, fetchProfile]);
+  }, [fetchVenues]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchVenues();
       fetchProfile();
-    }, [fetchVenues, fetchProfile])
+    }, [fetchProfile])
   );
-
-  useEffect(() => {
-    if (venues.length === 0) {
-      setVenueImageUrls({});
-      return;
-    }
-    const fetchUrls = async () => {
-      const urls: Record<string, string> = {};
-      await Promise.all(
-        venues.map(async (venue) => {
-          if (venue.profileImageRef) {
-            try {
-              const url = await getDownloadURL(
-                ref(storage, venue.profileImageRef)
-              );
-              urls[venue.id] = url;
-            } catch {
-              // No image for this venue
-            }
-          }
-        })
-      );
-      setVenueImageUrls(urls);
-    };
-    fetchUrls();
-  }, [venues]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [distanceFilter, categoryFilter]);
 
-  const userCoordinates = userProfile?.location?.coordinates;
+  const categoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(venues.map((v) => v.category))).sort();
+    return ["All", ...unique];
+  }, [venues]);
 
-  const venuesWithDistance = useMemo<VenueWithDistance[]>(() => {
+  const venuesWithDistance = useMemo<VenuePinWithDistance[]>(() => {
     return venues.map((venue) => {
       if (userCoordinates) {
         const { latitude: vLat, longitude: vLon } = venue.coordinates;
@@ -169,27 +136,16 @@ export default function VenuesScreen() {
     });
   }, [venues, userCoordinates]);
 
-  const filteredVenues = useMemo<VenueWithDistance[]>(() => {
+  const filteredVenues = useMemo<VenuePinWithDistance[]>(() => {
     const categoryFiltered = venuesWithDistance.filter((v) =>
-      categoryFilter.includes("All")
-        ? true
-        : v.categories.some((c) => categoryFilter.includes(c))
+      categoryFilter.includes("All") ? true : categoryFilter.includes(v.category)
     );
-
-    if (!userCoordinates) return categoryFiltered;
-
-    return categoryFiltered
-      .filter(
-        (v) =>
-          typeof v.distanceInMiles === "number" &&
-          v.distanceInMiles <= distanceFilter
-      )
-      .sort((a, b) => {
-        if (a.distanceInMiles === null) return 1;
-        if (b.distanceInMiles === null) return -1;
-        return a.distanceInMiles - b.distanceInMiles;
-      });
-  }, [venuesWithDistance, categoryFilter, distanceFilter, userCoordinates]);
+    return categoryFiltered.slice().sort((a, b) => {
+      if (a.distanceInMiles === null) return 1;
+      if (b.distanceInMiles === null) return -1;
+      return a.distanceInMiles - b.distanceInMiles;
+    });
+  }, [venuesWithDistance, categoryFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredVenues.length / PAGE_SIZE));
   const paginatedVenues = filteredVenues.slice(
@@ -210,40 +166,19 @@ export default function VenuesScreen() {
     });
   };
 
-  const goToVenue = () => {
-    if (userProfile?.hasVenueProfile && user?.uid) {
-      router.push(`/venue?uid=${encodeURIComponent(user.uid)}` as Href);
-      return;
-    }
-    router.push("/venue/create-venue" as Href);
-  };
-
   const renderVenueItem = useCallback(
-    ({ item }: { item: VenueWithDistance }) => (
+    ({ item }: { item: VenuePinWithDistance }) => (
       <Pressable
         style={styles.venueCard}
         onPress={() =>
           router.push(
-            `${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(item.id)}` as Href
+            `${VENUE_PROFILE_ROUTE}?mapboxId=${encodeURIComponent(item.mapboxId)}` as Href
           )
         }
       >
-        <Image
-          source={
-            venueImageUrls[item.id]
-              ? { uri: venueImageUrls[item.id] }
-              : require("@/assets/images/icon.png")
-          }
-          style={styles.venueImage}
-          accessibilityLabel={`${item.name} profile photo`}
-        />
         <View style={styles.venueContent}>
           <Text style={styles.venueName}>{item.name}</Text>
-          <Text style={styles.venueMeta}>{item.categories.join(", ")}</Text>
-          <Text style={styles.venueMeta}>
-            {[item.city, item.state].filter(Boolean).join(", ") ||
-              item.address}
-          </Text>
+          <Text style={styles.venueMeta}>{formatCategoryName(item.category)}</Text>
           {typeof item.distanceInMiles === "number" && (
             <Text style={styles.venueDistance}>
               {item.distanceInMiles.toFixed(1)} miles away
@@ -252,7 +187,7 @@ export default function VenuesScreen() {
         </View>
       </Pressable>
     ),
-    [venueImageUrls, router]
+    [router]
   );
 
   const renderEmpty = useCallback(
@@ -295,7 +230,7 @@ export default function VenuesScreen() {
     >
       <FlatList
         data={paginatedVenues}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.mapboxId}
         renderItem={renderVenueItem}
         ListEmptyComponent={renderEmpty}
         ListHeaderComponent={
@@ -304,13 +239,6 @@ export default function VenuesScreen() {
             <Text style={styles.subtitle}>
               Discover live music and entertainment spaces near you.
             </Text>
-            <Pressable style={styles.myVenueButton} onPress={goToVenue}>
-              <Text style={styles.myVenueButtonText}>
-                {userProfile?.hasVenueProfile
-                  ? "Manage My Venue"
-                  : "Create Venue Profile"}
-              </Text>
-            </Pressable>
             <View style={styles.filtersWrapper}>
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Distance</Text>
@@ -343,7 +271,7 @@ export default function VenuesScreen() {
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Category</Text>
                 <View style={styles.chipRow}>
-                  {CATEGORY_OPTIONS.map((cat) => (
+                  {categoryOptions.map((cat) => (
                     <Pressable
                       key={cat}
                       style={[
@@ -369,7 +297,7 @@ export default function VenuesScreen() {
                           categoryFilter.includes(cat) && styles.filterChipTextActive,
                         ]}
                       >
-                        {cat}
+                        {formatCategoryName(cat)}
                       </Text>
                     </Pressable>
                   ))}

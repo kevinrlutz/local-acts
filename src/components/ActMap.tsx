@@ -2,83 +2,52 @@ import Mapbox, { Camera, CircleLayer, MapView, ShapeSource } from "@rnmapbox/map
 import React, { useMemo } from "react";
 import { StyleSheet } from "react-native";
 import Colors from "../Colors";
-import type { ActProfile } from "../types/acts";
-import type { VenueProfile } from "../types/venues";
+import type { ActEvent } from "../types/acts";
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "")
 
 const DEFAULT_CENTER: [number, number] = [-98.35, 39.5]
 const DEFAULT_ZOOM = 4
 
-export type ActMapProps = {
-  acts: ActProfile[]
+export type EventMapProps = {
+  events: ActEvent[]
   userCoordinates?: { latitude: number; longitude: number } | null
-  onPinPress: (actId: string) => void
-  venues?: VenueProfile[]
-  onVenuePinPress?: (venueId: string) => void
+  onPinPress: (eventId: string) => void
 }
 
-export default function ActMap({ acts, userCoordinates, onPinPress, venues = [], onVenuePinPress }: ActMapProps) {
+export default function ActMap({ events, userCoordinates, onPinPress }: EventMapProps) {
   const centerCoordinate: [number, number] = userCoordinates
     ? [userCoordinates.longitude, userCoordinates.latitude]
     : DEFAULT_CENTER
   const zoom = userCoordinates ? 10 : DEFAULT_ZOOM
 
-  const actsGeoJson = useMemo(
+  const eventsGeoJson = useMemo(
     () => ({
       type: "FeatureCollection" as const,
-      features: acts
-        .filter((act) => act.location?.coordinates)
-        .map((act) => ({
+      features: events
+        .filter((event) => event.venueCoordinates)
+        .map((event) => ({
           type: "Feature" as const,
-          id: act.id,
+          id: event.id,
           geometry: {
             type: "Point" as const,
             coordinates: [
-              act.location.coordinates.longitude,
-              act.location.coordinates.latitude,
+              event.venueCoordinates!.longitude,
+              event.venueCoordinates!.latitude,
             ] as [number, number],
           },
-          properties: { id: act.id, name: act.name },
+          properties: { id: event.id, name: event.title },
         })),
     }),
-    [acts]
+    [events]
   )
 
-  const venuesGeoJson = useMemo(
-    () => ({
-      type: "FeatureCollection" as const,
-      features: venues.map((venue) => ({
-        type: "Feature" as const,
-        id: venue.id,
-        geometry: {
-          type: "Point" as const,
-          coordinates: [
-            venue.coordinates.longitude,
-            venue.coordinates.latitude,
-          ] as [number, number],
-        },
-        properties: { id: venue.id, name: venue.name },
-      })),
-    }),
-    [venues]
-  )
-
-  const handleActPress = (e: {
-    features?: Array<{ properties?: Record<string, unknown> }>
+  const handleEventPress = (e: {
+    features?: { properties?: Record<string, unknown> | null }[]
   }) => {
     const id = e.features?.[0]?.properties?.id
     if (typeof id === "string") {
       onPinPress(id)
-    }
-  }
-
-  const handleVenuePress = (e: {
-    features?: Array<{ properties?: Record<string, unknown> }>
-  }) => {
-    const id = e.features?.[0]?.properties?.id
-    if (typeof id === "string" && onVenuePinPress) {
-      onVenuePinPress(id)
     }
   }
 
@@ -89,23 +58,10 @@ export default function ActMap({ acts, userCoordinates, onPinPress, venues = [],
         zoomLevel={zoom}
         animationMode="none"
       />
-      {acts.length > 0 && (
-        <ShapeSource id="acts-source" shape={actsGeoJson} onPress={handleActPress}>
+      {events.length > 0 && (
+        <ShapeSource id="events-source" shape={eventsGeoJson} onPress={handleEventPress}>
           <CircleLayer
-            id="acts-circles"
-            style={{
-              circleColor: Colors.secondaryAction,
-              circleRadius: 10,
-              circleStrokeWidth: 2,
-              circleStrokeColor: Colors.primaryWhite,
-            }}
-          />
-        </ShapeSource>
-      )}
-      {venues.length > 0 && (
-        <ShapeSource id="venues-source" shape={venuesGeoJson} onPress={handleVenuePress}>
-          <CircleLayer
-            id="venues-circles"
+            id="events-circles"
             style={{
               circleColor: Colors.action,
               circleRadius: 10,

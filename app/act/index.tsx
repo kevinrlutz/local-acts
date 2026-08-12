@@ -17,13 +17,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
 import { auth, storage } from "@/src/lib/firebase";
-import { deleteActEvent, getActEvents, getActProfileById } from "@/src/services/acts";
+import { getActProfileById } from "@/src/services/acts";
+import { deleteEvent, getEventsForAct } from "@/src/services/events";
 import type { ActEvent, ActProfile } from "@/src/types/acts";
 import { getDownloadURL, ref } from "firebase/storage";
 
 const EDIT_ACT_ROUTE = "/act/edit-act" as Href;
 const CREATE_EVENT_ROUTE = "/act/create-event" as Href;
 const EDIT_EVENT_ROUTE = "/act/edit-event" as Href;
+const EVENT_ROUTE = "/event" as Href;
+const VENUE_PROFILE_ROUTE = "/venue" as Href;
 
 const SOCIAL_LINK_LABELS: Partial<Record<keyof NonNullable<ActProfile["links"]>, string>> = {
   spotify: "Spotify",
@@ -108,13 +111,13 @@ export default function ActProfileScreen() {
   useEffect(() => {
     let isMounted = true;
     const fetchEvents = async () => {
-      if (!actUid) {
+      if (!actUid || !actProfile || actProfile.id !== actUid) {
         setIsEventsLoading(false);
         return;
       }
       try {
         setIsEventsLoading(true);
-        const nextEvents = await getActEvents(actUid);
+        const nextEvents = await getEventsForAct(actUid, actProfile.eventUids ?? []);
         if (isMounted) {
           setEvents(nextEvents);
         }
@@ -131,7 +134,7 @@ export default function ActProfileScreen() {
     return () => {
       isMounted = false;
     };
-  }, [actUid]);
+  }, [actUid, actProfile]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -196,7 +199,7 @@ export default function ActProfileScreen() {
     }
 
     try {
-      await deleteActEvent(actProfile.id, eventId);
+      await deleteEvent(eventId);
       setEvents((prev) => prev?.filter((event) => event.id !== eventId) ?? []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to delete event.";
@@ -212,6 +215,10 @@ export default function ActProfileScreen() {
   const handleEditEventPress = (eventId: string) => {
     if (!actProfile) return;
     router.push((`${EDIT_EVENT_ROUTE}?uid=${encodeURIComponent(actProfile.id)}&eventId=${encodeURIComponent(eventId)}`) as Href);
+  };
+
+  const handleViewEventPress = (eventId: string) => {
+    router.push(`${EVENT_ROUTE}?eventId=${encodeURIComponent(eventId)}` as Href);
   };
 
   const handleOpenLink = async (url: string) => {
@@ -306,7 +313,7 @@ export default function ActProfileScreen() {
             ) : events && events.length ? (
               <View style={styles.eventList}>
                 {events.map((event) => (
-                  <View key={event.id} style={styles.eventCard}>
+                  <Pressable key={event.id} style={styles.eventCard} onPress={() => handleViewEventPress(event.id)}>
                     <View style={styles.eventHeader}>
                       <View style={styles.eventTitleGroup}>
                         <Text style={styles.eventTitle}>{event.title}</Text>
@@ -337,7 +344,21 @@ export default function ActProfileScreen() {
                         <Text style={styles.ticketButtonText}>Get Tickets</Text>
                       </Pressable>
                     ) : null}
-                  </View>
+                    {event.venueMapboxId ? (
+                      <Pressable
+                        style={styles.ticketButton}
+                        onPress={() =>
+                          router.push(
+                            `${VENUE_PROFILE_ROUTE}?mapboxId=${encodeURIComponent(
+                              event.venueMapboxId!
+                            )}` as Href
+                          )
+                        }
+                      >
+                        <Text style={styles.editButtonText}>View Venue</Text>
+                      </Pressable>
+                    ) : null}
+                  </Pressable>
                 ))}
               </View>
             ) : (

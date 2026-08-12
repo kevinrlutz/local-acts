@@ -34,6 +34,12 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="event"
+            options={{
+              title: "Event Details",
+            }}
+          />
+          <Stack.Screen
             name="venue"
             options={{
               title: "Venue Profile",

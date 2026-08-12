@@ -7,9 +7,9 @@ const Colors = {
 
     // --- Accent Colors (Engagement & CTA) ---
     /** Primary Call-to-Action (CTA) color, highly visible and energetic. (Electric Cyan) */
-    action: '#00E0FF',
+    action: '#15b2c7',
     /** Secondary CTA, used for 'Save' or 'Favorite' actions, associated with creativity. (Deep Violet) */
-    secondaryAction: '#BB86FC',
+    secondaryAction: '#6a80e2',
 
     // --- Text & Neutral Colors ---
     /** High-contrast text color for main headings and body content. (Off-white to prevent halation) */

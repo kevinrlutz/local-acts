@@ -1,70 +1,60 @@
 import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { getDownloadURL, ref } from "firebase/storage";
 import React, { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
-    Image,
     Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
-    View
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
-import { auth, storage } from "@/src/lib/firebase";
-import { getVenueProfileById } from "@/src/services/venues";
-import {
-    DayHours,
-    DayOfWeek,
-    DAYS_OF_WEEK,
-    VenueProfile,
-} from "@/src/types/venues";
+import { auth } from "@/src/lib/firebase";
+import { getUpcomingEventsForVenue } from "@/src/services/events";
+import { getVenueDetails, VenueNotFoundError } from "@/src/services/venueDetailsCache";
+import type { ActEvent } from "@/src/types/acts";
+import type { VenueDetails } from "@/src/types/venues";
 
-const EDIT_VENUE_ROUTE = "/venue/edit-venue" as Href;
+const EVENT_PROFILE_ROUTE = "/event" as Href;
 
-const DAY_LABELS: Record<DayOfWeek, string> = {
-  monday: "Monday",
-  tuesday: "Tuesday",
-  wednesday: "Wednesday",
-  thursday: "Thursday",
-  friday: "Friday",
-  saturday: "Saturday",
-  sunday: "Sunday",
+const formatPopularity = (score: number | null) => {
+  if (typeof score !== "number") return "Unknown";
+  return `${Math.round(score * 100)}%`;
 };
 
-const formatHours = (day: DayHours): string => {
-  if (day.closed) return "Closed";
-  if (!day.open || !day.close) return "Hours not set";
-  const fmt = (t: string) => {
-    const [hStr, mStr] = t.split(":");
-    const h = parseInt(hStr, 10);
-    const m = parseInt(mStr, 10);
-    const period = h < 12 ? "AM" : "PM";
-    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return `${h12}:${String(m).padStart(2, "0")} ${period}`;
-  };
-  return `${fmt(day.open)} – ${fmt(day.close)}`;
+const formatEventDate = (date: Date, hasTime?: boolean) => {
+  const datePart = date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  if (!hasTime) return datePart;
+  const timePart = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${datePart} • ${timePart}`;
 };
 
 export default function VenueProfileScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ uid?: string | string[] }>();
+  const params = useLocalSearchParams<{ mapboxId?: string | string[] }>();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [isCheckingAuth, setIsCheckingAuth] = useState(!auth.currentUser);
-  const [venueProfile, setVenueProfile] = useState<VenueProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
 
-  const venueUid = useMemo(() => {
-    const rawUid = params.uid;
-    if (!rawUid) return undefined;
-    return Array.isArray(rawUid) ? rawUid[0] : rawUid;
-  }, [params.uid]);
+  const [venueDetails, setVenueDetails] = useState<VenueDetails | null>(null);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(true);
+
+  const [events, setEvents] = useState<ActEvent[]>([]);
+  const [isEventsLoading, setIsEventsLoading] = useState(true);
+
+  const mapboxId = useMemo(() => {
+    const raw = params.mapboxId;
+    if (!raw) return undefined;
+    return Array.isArray(raw) ? raw[0] : raw;
+  }, [params.mapboxId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -76,63 +66,71 @@ export default function VenueProfileScreen() {
 
   useEffect(() => {
     let isMounted = true;
-    const fetchVenueProfile = async () => {
-      if (!venueUid) {
-        setError("Missing venue identifier.");
-        setIsLoading(false);
+    const load = async () => {
+      if (!mapboxId) {
+        setDetailsError("Missing venue identifier.");
+        setIsDetailsLoading(false);
         return;
       }
       try {
-        setIsLoading(true);
-        setError(null);
-        const profile = await getVenueProfileById(venueUid);
-        if (isMounted) {
-          setVenueProfile(profile);
-        }
+        setIsDetailsLoading(true);
+        setDetailsError(null);
+        const details = await getVenueDetails(mapboxId);
+        if (isMounted) setVenueDetails(details);
       } catch (err) {
+        // Degrade gracefully: a Places lookup failure (404, timeout, quota)
+        // shouldn't fail the whole page if there are still linked events to
+        // show below.
         const message =
-          err instanceof Error ? err.message : "Unable to load venue profile.";
-        if (isMounted) {
-          setError(message);
-        }
+          err instanceof VenueNotFoundError
+            ? "This venue is no longer listed."
+            : err instanceof Error
+            ? err.message
+            : "Venue details are unavailable right now.";
+        if (isMounted) setDetailsError(message);
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsDetailsLoading(false);
       }
     };
-
-    fetchVenueProfile();
+    load();
     return () => {
       isMounted = false;
     };
-  }, [venueUid]);
+  }, [mapboxId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadEvents = async () => {
+      if (!mapboxId) {
+        setIsEventsLoading(false);
+        return;
+      }
+      try {
+        setIsEventsLoading(true);
+        const upcoming = await getUpcomingEventsForVenue(mapboxId);
+        if (isMounted) setEvents(upcoming);
+      } catch (err) {
+        console.error("Failed to load venue events:", err);
+      } finally {
+        if (isMounted) setIsEventsLoading(false);
+      }
+    };
+    loadEvents();
+    return () => {
+      isMounted = false;
+    };
+  }, [mapboxId]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.title = venueProfile?.name
-        ? `${venueProfile.name} • Local Acts`
-        : "Venue Profile";
+      document.title = venueDetails?.name ? `${venueDetails.name} • Local Acts` : "Venue Profile";
       return () => {
         document.title = "Local Acts";
       };
     }
-  }, [venueProfile?.name]);
+  }, [venueDetails?.name]);
 
-  useEffect(() => {
-    if (venueProfile?.profileImageRef) {
-      getDownloadURL(ref(storage, venueProfile.profileImageRef))
-        .then(setImageUrl)
-        .catch(() => setImageUrl(undefined));
-    } else {
-      setImageUrl(undefined);
-    }
-  }, [venueProfile?.profileImageRef]);
-
-  const isOwner =
-    user && venueProfile && user.uid === venueProfile.ownerUid;
-
-  if (isCheckingAuth || isLoading) {
+  if (isCheckingAuth) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={Colors.secondaryAction} />
@@ -140,10 +138,25 @@ export default function VenueProfileScreen() {
     );
   }
 
-  if (error || !venueProfile) {
+  if (!user) {
+    return <View style={styles.centered} />;
+  }
+
+  const hasUsableDetails = !!venueDetails;
+  const hasEvents = events.length > 0;
+
+  if (isDetailsLoading && isEventsLoading) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{error ?? "Venue not found."}</Text>
+        <ActivityIndicator color={Colors.secondaryAction} />
+      </View>
+    );
+  }
+
+  if (!hasUsableDetails && !isDetailsLoading && !hasEvents && !isEventsLoading) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>{detailsError ?? "Venue not found."}</Text>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </Pressable>
@@ -155,65 +168,77 @@ export default function VenueProfileScreen() {
     <SafeAreaView style={styles.safeArea} edges={["right", "bottom", "left"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
-          {/* Hero image */}
-          <Image
-            source={
-              imageUrl
-                ? { uri: imageUrl }
-                : require("@/assets/images/icon.png")
-            }
-            style={styles.heroImage}
-            accessibilityLabel={`${venueProfile.name} profile photo`}
-          />
-
-          {/* Name & category */}
-          <View>
-            <Text style={styles.venueName}>{venueProfile.name}</Text>
-            <Text style={styles.venueCategory}>{venueProfile.categories.join(", ")}</Text>
-          </View>
-
-          {/* Address */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Address</Text>
-            <Text style={styles.sectionText}>{venueProfile.address}</Text>
-            <Text style={styles.sectionSubtext}>
-              {[venueProfile.city, venueProfile.state, venueProfile.zip]
-                .filter(Boolean)
-                .join(", ")}
-            </Text>
-          </View>
-
-          {/* Hours */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Hours</Text>
-            {DAYS_OF_WEEK.map((day) => (
-              <View key={day} style={styles.hoursRow}>
-                <Text style={styles.hoursDay}>{DAY_LABELS[day]}</Text>
-                <Text
-                  style={[
-                    styles.hoursValue,
-                    venueProfile.hours[day].closed && styles.hoursClosed,
-                  ]}
-                >
-                  {formatHours(venueProfile.hours[day])}
+          {hasUsableDetails ? (
+            <>
+              <View>
+                <Text style={styles.venueName}>{venueDetails.name}</Text>
+                <Text style={styles.venueCategory}>
+                  {(venueDetails.categories.length
+                    ? venueDetails.categories
+                    : venueDetails.primaryCategory
+                    ? [venueDetails.primaryCategory]
+                    : []
+                  ).join(", ") || "Venue"}
                 </Text>
               </View>
-            ))}
-          </View>
 
-          {/* Owner actions */}
-          {isOwner && (
-            <Pressable
-              style={styles.editButton}
-              onPress={() =>
-                router.push(
-                  `${EDIT_VENUE_ROUTE}?uid=${encodeURIComponent(venueProfile.id)}` as Href
-                )
-              }
-            >
-              <Text style={styles.editButtonText}>Edit Venue Profile</Text>
-            </Pressable>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Hours</Text>
+                <Text style={styles.sectionText}>
+                  {venueDetails.openingHours ?? "Hours not available"}
+                </Text>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Popularity</Text>
+                <Text style={styles.sectionText}>
+                  {formatPopularity(venueDetails.popularityScore)}
+                </Text>
+              </View>
+
+              {venueDetails.permanentlyClosed ? (
+                <Text style={styles.warningText}>This venue is marked as permanently closed.</Text>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.section}>
+              <Text style={styles.venueName}>Venue details unavailable</Text>
+              <Text style={styles.sectionSubtext}>
+                {detailsError ?? "We couldn't load details for this venue right now."}
+              </Text>
+            </View>
           )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Upcoming Events</Text>
+            {isEventsLoading ? (
+              <ActivityIndicator color={Colors.secondaryAction} />
+            ) : hasEvents ? (
+              <View style={styles.eventList}>
+                {events.map((event) => (
+                  <Pressable
+                    key={event.id}
+                    style={styles.eventCard}
+                    onPress={() =>
+                      router.push(
+                        `${EVENT_PROFILE_ROUTE}?eventId=${encodeURIComponent(event.id)}` as Href
+                      )
+                    }
+                  >
+                    <Text style={styles.eventTitle}>{event.title}</Text>
+                    <Text style={styles.eventMeta}>
+                      {formatEventDate(event.eventDate, event.hasTime)}
+                    </Text>
+                    {event.description ? (
+                      <Text style={styles.sectionSubtext}>{event.description}</Text>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.sectionSubtext}>No upcoming events at this venue yet.</Text>
+            )}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -250,11 +275,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.contentBorder,
   },
-  heroImage: {
-    width: "100%",
-    height: 240,
-    borderRadius: 18,
-  },
   section: {
     marginTop: 12,
     gap: 8,
@@ -280,43 +300,35 @@ const styles = StyleSheet.create({
     color: Colors.secondaryGray,
     fontSize: 14,
   },
-  hoursRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.contentBorder,
-  },
-  hoursDay: {
-    color: Colors.primaryWhite,
+  warningText: {
+    color: "#FF5A5F",
     fontWeight: "600",
-    width: 100,
   },
-  hoursValue: {
-    color: Colors.primaryWhite,
-    flex: 1,
-    textAlign: "right",
+  eventList: {
+    gap: 10,
   },
-  hoursClosed: {
-    color: Colors.secondaryGray,
-    fontStyle: "italic",
-  },
-  editButton: {
-    backgroundColor: Colors.action,
-    paddingVertical: 14,
+  eventCard: {
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
     borderRadius: 12,
-    alignItems: "center",
+    padding: 14,
+    gap: 4,
   },
-  editButtonText: {
-    color: Colors.secondaryBackground,
+  eventTitle: {
+    color: Colors.primaryWhite,
     fontWeight: "700",
     fontSize: 15,
+  },
+  eventMeta: {
+    color: Colors.secondaryGray,
+    fontSize: 13,
   },
   backButton: {
     borderWidth: 1,
     borderColor: Colors.contentBorder,
     borderRadius: 12,
     paddingVertical: 12,
+    paddingHorizontal: 20,
     alignItems: "center",
   },
   backButtonText: {
@@ -328,3 +340,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 });
+

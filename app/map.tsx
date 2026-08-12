@@ -3,60 +3,83 @@ import { Href, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    Animated,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 
 import Colors from "../src/Colors";
 import ActMap from "../src/components/ActMap";
 import { auth } from "../src/lib/firebase";
-import { calculateDistanceMiles } from "../src/lib/geoUtils";
-import { getAllActs } from "../src/services/acts";
+import { getEventsWithinLocationBounds } from "../src/services/events";
 import { getAppUserFromFirestore } from "../src/services/userProfile";
-import { getAllVenues } from "../src/services/venues";
-import type { ActCategory, ActProfile } from "../src/types/acts";
+import type { ActCategory, ActEvent } from "../src/types/acts";
 import type { AppUser } from "../src/types/auth";
-import type { VenueCategory, VenueProfile } from "../src/types/venues";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href
-const ACT_PROFILE_ROUTE = "/act" as Href
-const VENUE_PROFILE_ROUTE = "/venue" as Href
-const DISTANCE_OPTIONS = [10, 25, 50, 100]
+const EVENT_PROFILE_ROUTE = "/event" as Href
+const DISTANCE_OPTIONS = [5, 10, 25]
 const CATEGORY_OPTIONS: ("All" | ActCategory)[] = [
   "All",
   "Musician",
   "Comedian",
   "Other",
 ]
-const VENUE_CATEGORY_OPTIONS: ("All" | VenueCategory)[] = [
-  "All",
-  "Bar / Club",
-  "Concert Hall",
-  "Theater",
-  "Restaurant",
-  "Other",
-]
 
-type MapMode = "acts" | "venues"
-type ActWithDistance = ActProfile & { distanceInMiles: number | null }
-type VenueWithDistance = VenueProfile & { distanceInMiles: number | null }
+const formatDateInput = (date: Date) => date.toISOString().slice(0, 10)
+
+const parseDateInput = (value: string, endOfDay = false): Date | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const [, year, month, day] = match
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  if (
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() !== Number(month) - 1 ||
+    date.getDate() !== Number(day)
+  ) return null
+  if (endOfDay) date.setHours(23, 59, 59, 999)
+  return date
+}
+
+const getLocationBounds = (
+  latitude: number,
+  longitude: number,
+  radiusMiles: number
+) => {
+  const latitudeDelta = radiusMiles / 69.172
+  const longitudeDelta = radiusMiles / (69.172 * Math.max(Math.cos((latitude * Math.PI) / 180), 0.01))
+  return {
+    minLatitude: latitude - latitudeDelta,
+    maxLatitude: latitude + latitudeDelta,
+    minLongitude: longitude - longitudeDelta,
+    maxLongitude: longitude + longitudeDelta,
+  }
+}
 
 export default function MapScreen() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(() => auth.currentUser)
   const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser)
   const [userProfile, setUserProfile] = useState<AppUser | null>(null)
-  const [mapMode, setMapMode] = useState<MapMode>("acts")
-  const [acts, setActs] = useState<ActProfile[]>([])
-  const [venues, setVenues] = useState<VenueProfile[]>([])
-  const [actsLoading, setActsLoading] = useState(false)
+  const [events, setEvents] = useState<ActEvent[]>([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventsError, setEventsError] = useState<string | null>(null)
   const [distanceFilter, setDistanceFilter] = useState<number>(DISTANCE_OPTIONS[1])
   const [categoryFilter, setCategoryFilter] = useState<("All" | ActCategory)[]>(["All"])
-  const [venueCategoryFilter, setVenueCategoryFilter] = useState<("All" | VenueCategory)[]>(["All"])
+  const [startDateFilter, setStartDateFilter] = useState(() => {
+    const startDate = new Date()
+    return formatDateInput(startDate)
+  })
+  const [endDateFilter, setEndDateFilter] = useState(() => {
+    const endDate = new Date()
+    endDate.setMonth(endDate.getMonth() + 1)
+    return formatDateInput(endDate)
+  })
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Native driver handles opacity/transform; JS driver handles maxHeight (layout prop)
   const slideAnimNative = useRef(new Animated.Value(0)).current
@@ -96,97 +119,53 @@ export default function MapScreen() {
   }, [user])
 
   useEffect(() => {
-    if (!user) {
-      setActs([])
+    if (!user || !userProfile?.location?.coordinates) {
+      setEvents([])
+      setEventsError(null)
       return
     }
-    setActsLoading(true)
-    const fetchActs = async () => {
-      try {
-        const allActs = await getAllActs()
-        setActs(allActs)
-      } catch (error) {
-        console.error("Failed to fetch acts:", error)
-      } finally {
-        setActsLoading(false)
-      }
-    }
-    void fetchActs()
-  }, [user])
-
-  useEffect(() => {
-    if (!user) {
-      setVenues([])
+    const { latitude, longitude } = userProfile.location.coordinates
+    const startDate = parseDateInput(startDateFilter)
+    const endDate = parseDateInput(endDateFilter, true)
+    if (!startDate || !endDate || startDate > endDate) {
+      setEvents([])
+      setEventsError("Enter a valid date range.")
       return
     }
-    const fetchVenues = async () => {
-      try {
-        const allVenues = await getAllVenues()
-        setVenues(allVenues)
-      } catch (error) {
-        console.error("Failed to fetch venues:", error)
-      }
+    let isCancelled = false
+    setEventsLoading(true)
+    setEventsError(null)
+    getEventsWithinLocationBounds(
+      getLocationBounds(latitude, longitude, distanceFilter),
+      startDate,
+      endDate
+    )
+      .then((nextEvents) => {
+        if (!isCancelled) setEvents(nextEvents)
+      })
+      .catch((error) => {
+        console.error("Failed to fetch events for map:", error)
+        if (!isCancelled) {
+          setEvents([])
+          setEventsError(error instanceof Error ? error.message : "Unable to load events.")
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) setEventsLoading(false)
+      })
+    return () => {
+      isCancelled = true
     }
-    void fetchVenues()
-  }, [user])
+  }, [user, userProfile?.location?.coordinates, distanceFilter, startDateFilter, endDateFilter])
 
   const userCoordinates = userProfile?.location?.coordinates
 
-  const actsWithDistance = useMemo<ActWithDistance[]>(() => {
-    return acts.map((act) => {
-      if (userCoordinates && act.location?.coordinates) {
-        const { latitude: actLat, longitude: actLon } = act.location.coordinates
-        const { latitude: userLat, longitude: userLon } = userCoordinates
-        return {
-          ...act,
-          distanceInMiles: calculateDistanceMiles(userLat, userLon, actLat, actLon),
-        }
-      }
-      return { ...act, distanceInMiles: null }
-    })
-  }, [acts, userCoordinates])
-
-  const filteredActs = useMemo<ActWithDistance[]>(() => {
-    const categoryFiltered = actsWithDistance.filter((act) =>
-      categoryFilter.includes("All") ? true : categoryFilter.includes(act.category)
-    )
-    if (!userCoordinates) {
-      return categoryFiltered
-    }
-    return categoryFiltered.filter(
-      (act) =>
-        typeof act.distanceInMiles === "number" &&
-        act.distanceInMiles <= distanceFilter
-    )
-  }, [actsWithDistance, categoryFilter, distanceFilter, userCoordinates])
-
-  const venuesWithDistance = useMemo<VenueWithDistance[]>(() => {
-    return venues.map((venue) => {
-      if (userCoordinates) {
-        const { latitude: vLat, longitude: vLon } = venue.coordinates
-        const { latitude: uLat, longitude: uLon } = userCoordinates
-        return {
-          ...venue,
-          distanceInMiles: calculateDistanceMiles(uLat, uLon, vLat, vLon),
-        }
-      }
-      return { ...venue, distanceInMiles: null }
-    })
-  }, [venues, userCoordinates])
-
-  const filteredVenues = useMemo<VenueWithDistance[]>(() => {
-    const categoryFiltered = venuesWithDistance.filter((v) =>
-      venueCategoryFilter.includes("All")
-        ? true
-        : v.categories.some((c) => venueCategoryFilter.includes(c))
-    )
-    if (!userCoordinates) return categoryFiltered
-    return categoryFiltered.filter(
-      (v) =>
-        typeof v.distanceInMiles === "number" &&
-        v.distanceInMiles <= distanceFilter
-    )
-  }, [venuesWithDistance, venueCategoryFilter, distanceFilter, userCoordinates])
+  const filteredEvents = useMemo<ActEvent[]>(
+    () => events.filter((event) =>
+      categoryFilter.includes("All") ? true : categoryFilter.includes(event.actCategory)
+    ),
+    [events, categoryFilter]
+  )
 
   const toggleFilters = () => {
     const toValue = filtersOpen ? 0 : 1
@@ -206,15 +185,8 @@ export default function MapScreen() {
   }
 
   const handlePinPress = useCallback(
-    (actId: string) => {
-      router.push(`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(actId)}` as Href)
-    },
-    [router]
-  )
-
-  const handleVenuePinPress = useCallback(
-    (venueId: string) => {
-      router.push(`${VENUE_PROFILE_ROUTE}?uid=${encodeURIComponent(venueId)}` as Href)
+    (eventId: string) => {
+      router.push(`${EVENT_PROFILE_ROUTE}?eventId=${encodeURIComponent(eventId)}` as Href)
     },
     [router]
   )
@@ -234,11 +206,9 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <ActMap
-        acts={mapMode === "acts" ? filteredActs : []}
-        venues={mapMode === "venues" ? filteredVenues : []}
+        events={filteredEvents}
         userCoordinates={userCoordinates}
         onPinPress={handlePinPress}
-        onVenuePinPress={handleVenuePinPress}
       />
 
       {/* Filter dropdown overlaid on top of the map */}
@@ -263,28 +233,12 @@ export default function MapScreen() {
             </Animated.View>
           </Pressable>
 
-          {/* Mode toggle — always visible */}
-          <View style={styles.modeToggleRow}>
-            <Pressable
-              style={[styles.modeToggleButton, mapMode === "acts" && styles.modeToggleActive]}
-              onPress={() => setMapMode("acts")}
-            >
-              <Text style={[styles.modeToggleText, mapMode === "acts" && styles.modeToggleTextActive]}>Acts</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.modeToggleButton, mapMode === "venues" && styles.modeToggleActive]}
-              onPress={() => setMapMode("venues")}
-            >
-              <Text style={[styles.modeToggleText, mapMode === "venues" && styles.modeToggleTextActive]}>Venues</Text>
-            </Pressable>
-          </View>
-
           {/* Collapsible body - outer wrapper for maxHeight */}
           <Animated.View
             style={{
               maxHeight: slideAnimJS.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, 400],
+                outputRange: [0, 450],
               }),
               overflow: "hidden",
             }}
@@ -333,71 +287,55 @@ export default function MapScreen() {
                   </View>
                 </View>
 
-                {/* Category row */}
                 <View style={styles.filterRow}>
                   <Text style={styles.filterLabel}>Category</Text>
                   <View style={styles.chipRow}>
-                    {mapMode === "acts"
-                      ? CATEGORY_OPTIONS.map((category) => (
-                          <Pressable
-                            key={category}
-                            style={[
-                              styles.filterChip,
-                              categoryFilter.includes(category) && styles.filterChipActive,
-                            ]}
-                            onPress={() => {
-                              if (category === "All") {
-                                setCategoryFilter(["All"]);
-                              } else if (categoryFilter.includes(category)) {
-                                const next = categoryFilter.filter((c) => c !== category);
-                                setCategoryFilter(next.length === 0 ? ["All"] : next);
-                              } else {
-                                setCategoryFilter(
-                                  categoryFilter.filter((c) => c !== "All").concat(category)
-                                );
-                              }
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.filterChipText,
-                                categoryFilter.includes(category) && styles.filterChipTextActive,
-                              ]}
-                            >
-                              {category}
-                            </Text>
-                          </Pressable>
-                        ))
-                      : VENUE_CATEGORY_OPTIONS.map((category) => (
-                          <Pressable
-                            key={category}
-                            style={[
-                              styles.filterChip,
-                              venueCategoryFilter.includes(category) && styles.filterChipActive,
-                            ]}
-                            onPress={() => {
-                              if (category === "All") {
-                                setVenueCategoryFilter(["All"]);
-                              } else if (venueCategoryFilter.includes(category)) {
-                                const next = venueCategoryFilter.filter((c) => c !== category);
-                                setVenueCategoryFilter(next.length === 0 ? ["All"] : next);
-                              } else {
-                                setVenueCategoryFilter(
-                                  venueCategoryFilter.filter((c) => c !== "All").concat(category)
-                                );
-                              }
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.filterChipText,
-                                venueCategoryFilter.includes(category) && styles.filterChipTextActive,
-                              ]}
-                            >
-                              {category}
-                            </Text>
-                          </Pressable>
-                        ))}
+                    {CATEGORY_OPTIONS.map((category) => (
+                      <Pressable
+                        key={category}
+                        style={[
+                          styles.filterChip,
+                          categoryFilter.includes(category) && styles.filterChipActive,
+                        ]}
+                        onPress={() => {
+                          if (category === "All") {
+                            setCategoryFilter(["All"]);
+                          } else if (categoryFilter.includes(category)) {
+                            const next = categoryFilter.filter((currentCategory) => currentCategory !== category);
+                            setCategoryFilter(next.length === 0 ? ["All"] : next);
+                          } else {
+                            setCategoryFilter(categoryFilter.filter((currentCategory) => currentCategory !== "All").concat(category));
+                          }
+                        }}
+                      >
+                        <Text style={[styles.filterChipText, categoryFilter.includes(category) && styles.filterChipTextActive]}>
+                          {category}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Date range</Text>
+                  <View style={styles.dateInputRow}>
+                    <TextInput
+                      accessibilityLabel="Start date"
+                      value={startDateFilter}
+                      onChangeText={setStartDateFilter}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={Colors.secondaryGray}
+                      style={styles.dateInput}
+                    />
+                    <Text style={styles.dateSeparator}>to</Text>
+                    <TextInput
+                      accessibilityLabel="End date"
+                      value={endDateFilter}
+                      onChangeText={setEndDateFilter}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={Colors.secondaryGray}
+                      style={styles.dateInput}
+                    />
                   </View>
                 </View>
               </View>
@@ -406,9 +344,14 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {actsLoading && (
+      {eventsLoading && (
         <View style={styles.loadingOverlay} pointerEvents="none">
           <ActivityIndicator color={Colors.secondaryAction} />
+        </View>
+      )}
+      {eventsError && !eventsLoading && (
+        <View style={styles.errorOverlay} pointerEvents="none">
+          <Text style={styles.errorText}>{eventsError}</Text>
         </View>
       )}
     </View>
@@ -453,32 +396,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14,
   },
-  modeToggleRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  modeToggleButton: {
-    flex: 1,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.contentBorder,
-    alignItems: "center",
-  },
-  modeToggleActive: {
-    backgroundColor: Colors.secondaryAction,
-    borderColor: Colors.secondaryAction,
-  },
-  modeToggleText: {
-    color: Colors.secondaryGray,
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  modeToggleTextActive: {
-    color: Colors.secondaryBackground,
-  },
   filterBody: {
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -498,6 +415,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  dateInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dateInput: {
+    flex: 1,
+    minWidth: 0,
+    color: Colors.primaryWhite,
+    borderWidth: 1,
+    borderColor: Colors.contentBorder,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 13,
+  },
+  dateSeparator: {
+    color: Colors.secondaryGray,
+    fontSize: 12,
   },
   filterChip: {
     paddingVertical: 6,
@@ -524,10 +461,30 @@ const styles = StyleSheet.create({
   filterChipTextDisabled: {
     color: Colors.secondaryGray,
   },
+  filterHelperText: {
+    color: Colors.secondaryGray,
+    fontSize: 12,
+  },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(22,23,24,0.6)",
+  },
+  errorOverlay: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 12,
+    alignItems: "center",
+  },
+  errorText: {
+    color: Colors.primaryWhite,
+    backgroundColor: "rgba(190, 45, 45, 0.95)",
+    borderRadius: 6,
+    overflow: "hidden",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    textAlign: "center",
   },
 })

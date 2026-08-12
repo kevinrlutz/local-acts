@@ -1,93 +1,49 @@
-export type VenueCategory =
-  | "Bar / Club"
-  | "Concert Hall"
-  | "Theater"
-  | "Restaurant"
-  | "Other";
+/**
+ * Venues are Mapbox Places/Search Box data, not app-owned profiles.
+ *
+ * Hard constraint (see venues feature brief): only `mapbox_id` may ever be
+ * persisted to the primary database (e.g. as `Event.venueMapboxId`). Every
+ * other field below (name, category, hours, popularity, coordinates, etc.)
+ * comes from a live Mapbox API response or a short-TTL cache in front of one
+ * — never write these display fields to Firestore; event documents may store
+ * the resolved venue coordinates alongside the Mapbox ID.
+ */
 
-export type DayHours = {
-  closed: boolean;
-  /** Opening time in HH:MM 24-hour format. Null when closed. */
-  open: string | null;
-  /** Closing time in HH:MM 24-hour format. Null when closed.
-   *  A close time numerically less than open time implies crossing midnight
-   *  (e.g. open "20:00", close "02:00" = 8 PM – 2 AM). */
-  close: string | null;
-};
-
-export type WeeklyHours = {
-  monday: DayHours;
-  tuesday: DayHours;
-  wednesday: DayHours;
-  thursday: DayHours;
-  friday: DayHours;
-  saturday: DayHours;
-  sunday: DayHours;
-};
-
-export const DAYS_OF_WEEK = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-] as const;
-
-export type DayOfWeek = (typeof DAYS_OF_WEEK)[number];
-
-export const DEFAULT_WEEKLY_HOURS: WeeklyHours = {
-  monday: { closed: false, open: null, close: null },
-  tuesday: { closed: false, open: null, close: null },
-  wednesday: { closed: false, open: null, close: null },
-  thursday: { closed: false, open: null, close: null },
-  friday: { closed: false, open: null, close: null },
-  saturday: { closed: false, open: null, close: null },
-  sunday: { closed: false, open: null, close: null },
-};
-
-export type VenueProfile = {
-  id: string;
-  ownerUid: string;
+/** A pin on the map, from a Search Box `/category/{id}` result. */
+export type VenuePin = {
+  mapboxId: string;
   name: string;
-  categories: VenueCategory[];
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-  formattedAddress: string;
-  coordinates: {
-    latitude: number;
-    longitude: number;
-  };
-  hours: WeeklyHours;
-  profileImageRef?: string | null;
-  createdAt?: Date | null;
-  updatedAt?: Date | null;
+  /** First/primary POI category label returned for this result. */
+  category: string;
+  coordinates: { latitude: number; longitude: number };
 };
 
-export type CreateVenueProfilePayload = {
-  ownerUid: string;
+/** Venue profile-page data, from a Places `/details/retrieve/{mapbox_id}` result. */
+export type VenueDetails = {
+  mapboxId: string;
   name: string;
-  categories: VenueCategory[];
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-  formattedAddress: string;
-  coordinates: {
-    latitude: number;
-    longitude: number;
-  };
-  hours: WeeklyHours;
-  profileImageRef?: string | null;
+  primaryCategory: string | null;
+  categories: string[];
+  /** Free-form opening hours string (opening_hours). May be absent. */
+  openingHours: string | null;
+  /** 0-1 popularity score (score.popularity). Null when unavailable. */
+  popularityScore: number | null;
+  permanentlyClosed: boolean | null;
+  coordinates: { latitude: number; longitude: number } | null;
 };
 
-export type VenuePickerItem = {
-  id: string;
+/** A single `/suggest` result, shown while the user is typing. */
+export type VenueSuggestion = {
+  mapboxId: string;
   name: string;
-  address: string;
-  city: string;
-  state: string;
+  fullAddress: string | null;
+  placeFormatted: string | null;
+};
+
+/** A resolved `/retrieve` result, used to confirm a selection to the user. */
+export type VenueSearchResult = {
+  mapboxId: string;
+  name: string;
+  fullAddress: string | null;
+  coordinates: { latitude: number; longitude: number } | null;
 };

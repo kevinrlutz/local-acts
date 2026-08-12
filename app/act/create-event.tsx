@@ -2,26 +2,26 @@ import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
+import VenuePicker, { SelectedVenue } from "@/src/components/VenuePicker";
 import { auth } from "@/src/lib/firebase";
 import { parseEventDate, validateTicketUrl } from "@/src/lib/validationUtils";
-import { createActEvent, getActProfileById } from "@/src/services/acts";
-import { getVenuesForEventPicker } from "@/src/services/venues";
+import { getActProfileById } from "@/src/services/acts";
+import { createEvent } from "@/src/services/events";
 import type { ActProfile } from "@/src/types/acts";
-import type { VenuePickerItem } from "@/src/types/venues";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACT_PROFILE_ROUTE = "/act" as Href;
@@ -44,9 +44,7 @@ export default function CreateEventScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [availableVenues, setAvailableVenues] = useState<VenuePickerItem[]>([]);
-  const [selectedVenue, setSelectedVenue] = useState<VenuePickerItem | null>(null);
-  const [venuePickerOpen, setVenuePickerOpen] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState<SelectedVenue | null>(null);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -94,12 +92,6 @@ export default function CreateEventScreen() {
 
     loadAct();
   }, [uid, user, router]);
-
-  useEffect(() => {
-    getVenuesForEventPicker()
-      .then(setAvailableVenues)
-      .catch((err) => console.error("Failed to load venues:", err));
-  }, []);
 
   const actName = useMemo(() => actProfile?.name ?? "", [actProfile?.name]);
 
@@ -151,15 +143,16 @@ export default function CreateEventScreen() {
       setIsSubmitting(true);
       setError(null);
 
-      await createActEvent(actProfile.id, {
+      await createEvent(actProfile.id, {
         title: trimmedTitle,
-        location: trimmedLocation || undefined,
+        actCategory: actProfile.category,
+        location: trimmedLocation || (selectedVenue ? `${selectedVenue.name} - ${selectedVenue.fullAddress}` : undefined),
         ticketLink: validatedTicketLink,
         description: trimmedDescription || undefined,
         eventDate: parsedDate,
         hasTime,
-        venueId: selectedVenue?.id ?? null,
-        venueName: selectedVenue?.name ?? null,
+        venueMapboxId: selectedVenue?.mapboxId ?? null,
+        venueCoordinates: selectedVenue?.coordinates ?? null,
       });
 
       router.replace((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(actProfile.id)}`) as Href);
@@ -235,7 +228,12 @@ export default function CreateEventScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Location (optional)</Text>
+              <Text style={styles.label}>Venue (optional)</Text>
+              <VenuePicker value={selectedVenue} onChange={setSelectedVenue} />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Location (optional - you can use this if your venue isn&apos;t listed)</Text>
               <TextInput
                 value={location}
                 onChangeText={setLocation}
@@ -269,38 +267,6 @@ export default function CreateEventScreen() {
                 numberOfLines={4}
                 textAlignVertical="top"
               />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Venue (optional)</Text>
-              <Pressable
-                style={styles.input}
-                onPress={() => setVenuePickerOpen((v) => !v)}
-              >
-                <Text style={{ color: selectedVenue ? Colors.primaryWhite : Colors.secondaryGray }}>
-                  {selectedVenue ? `${selectedVenue.name} — ${selectedVenue.city}, ${selectedVenue.state}` : "Select a venue"}
-                </Text>
-              </Pressable>
-              {venuePickerOpen && (
-                <View style={styles.venuePicker}>
-                  <Pressable
-                    style={styles.venuePickerItem}
-                    onPress={() => { setSelectedVenue(null); setVenuePickerOpen(false); }}
-                  >
-                    <Text style={styles.venuePickerText}>None</Text>
-                  </Pressable>
-                  {availableVenues.map((v) => (
-                    <Pressable
-                      key={v.id}
-                      style={styles.venuePickerItem}
-                      onPress={() => { setSelectedVenue(v); setVenuePickerOpen(false); }}
-                    >
-                      <Text style={styles.venuePickerText}>{v.name}</Text>
-                      <Text style={styles.venuePickerMeta}>{v.address}{v.city ? `, ${v.city}` : ""}{v.state ? `, ${v.state}` : ""}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}

@@ -16,12 +16,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Colors from "@/src/Colors";
+import VenuePicker, { SelectedVenue } from "@/src/components/VenuePicker";
 import { auth } from "@/src/lib/firebase";
 import { parseEventDate, validateTicketUrl } from "@/src/lib/validationUtils";
-import { getActEventById, getActProfileById, updateActEvent } from "@/src/services/acts";
-import { getVenuesForEventPicker } from "@/src/services/venues";
+import { getActProfileById } from "@/src/services/acts";
+import { getEventById, updateEvent } from "@/src/services/events";
+import { getVenueDetails } from "@/src/services/venueDetailsCache";
 import type { ActEvent, ActProfile } from "@/src/types/acts";
-import type { VenuePickerItem } from "@/src/types/venues";
 
 const LOGIN_ROUTE = "/(auth)/login" as Href;
 const ACT_PROFILE_ROUTE = "/act" as Href;
@@ -48,9 +49,7 @@ export default function EditEventScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [availableVenues, setAvailableVenues] = useState<VenuePickerItem[]>([]);
-  const [selectedVenue, setSelectedVenue] = useState<VenuePickerItem | null>(null);
-  const [venuePickerOpen, setVenuePickerOpen] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState<SelectedVenue | null>(null);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -86,7 +85,7 @@ export default function EditEventScreen() {
           router.replace(ACT_PROFILE_ROUTE);
           return;
         }
-        const existingEvent = await getActEventById(uid, eventId);
+        const existingEvent = await getEventById(eventId);
         setActProfile(profile);
         setEvent(existingEvent);
         setTitle(existingEvent.title);
@@ -95,14 +94,27 @@ export default function EditEventScreen() {
         setLocation(existingEvent.location ?? "");
         setTicketLink(existingEvent.ticketLink ?? "");
         setDescription(existingEvent.description ?? "");
-        // Pre-populate venue if stored
-        if (existingEvent.venueId) {
-          const venues = await getVenuesForEventPicker();
-          setAvailableVenues(venues);
-          const match = venues.find((v) => v.id === existingEvent.venueId);
-          if (match) setSelectedVenue(match);
-        } else {
-          getVenuesForEventPicker().then(setAvailableVenues).catch(console.error);
+        // Pre-populate the venue picker label if this event already has a
+        // linked venue. Uses the venue-details cache (Places), not a fresh
+        // Search Box session, since we're only confirming a name for display.
+        if (existingEvent.venueMapboxId) {
+          const venueMapboxId = existingEvent.venueMapboxId;
+          try {
+            const details = await getVenueDetails(venueMapboxId);
+            setSelectedVenue({
+              mapboxId: venueMapboxId,
+              name: details.name,
+              fullAddress: null,
+              coordinates: details.coordinates ?? existingEvent.venueCoordinates ?? null,
+            });
+          } catch {
+            setSelectedVenue({
+              mapboxId: venueMapboxId,
+              name: "Selected venue",
+              fullAddress: null,
+              coordinates: existingEvent.venueCoordinates ?? null,
+            });
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unable to load event.";
@@ -166,15 +178,16 @@ export default function EditEventScreen() {
       setIsSubmitting(true);
       setError(null);
 
-      await updateActEvent(actProfile.id, event.id, {
+      await updateEvent(event.id, {
         title: trimmedTitle,
-        location: trimmedLocation || undefined,
+        actCategory: actProfile.category,
+        location: trimmedLocation || (selectedVenue ? `${selectedVenue.name} - ${selectedVenue.fullAddress}` : undefined),
         ticketLink: validatedTicketLink,
         description: trimmedDescription || undefined,
         eventDate: parsedDate,
         hasTime,
-        venueId: selectedVenue?.id ?? null,
-        venueName: selectedVenue?.name ?? null,
+        venueMapboxId: selectedVenue?.mapboxId ?? null,
+        venueCoordinates: selectedVenue?.coordinates ?? event.venueCoordinates ?? null,
       });
 
       router.replace((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(actProfile.id)}`) as Href);
@@ -250,7 +263,12 @@ export default function EditEventScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Location (optional)</Text>
+              <Text style={styles.label}>Venue (optional)</Text>
+              <VenuePicker value={selectedVenue} onChange={setSelectedVenue} />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Location (optional - you can use this if your venue isn&apos;t listed)</Text>
               <TextInput
                 value={location}
                 onChangeText={setLocation}
@@ -284,38 +302,6 @@ export default function EditEventScreen() {
                 numberOfLines={4}
                 textAlignVertical="top"
               />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Venue (optional)</Text>
-              <Pressable
-                style={styles.input}
-                onPress={() => setVenuePickerOpen((v) => !v)}
-              >
-                <Text style={{ color: selectedVenue ? Colors.primaryWhite : Colors.secondaryGray }}>
-                  {selectedVenue ? `${selectedVenue.name} — ${selectedVenue.city}, ${selectedVenue.state}` : "Select a venue"}
-                </Text>
-              </Pressable>
-              {venuePickerOpen && (
-                <View style={styles.venuePicker}>
-                  <Pressable
-                    style={styles.venuePickerItem}
-                    onPress={() => { setSelectedVenue(null); setVenuePickerOpen(false); }}
-                  >
-                    <Text style={styles.venuePickerText}>None</Text>
-                  </Pressable>
-                  {availableVenues.map((v) => (
-                    <Pressable
-                      key={v.id}
-                      style={styles.venuePickerItem}
-                      onPress={() => { setSelectedVenue(v); setVenuePickerOpen(false); }}
-                    >
-                      <Text style={styles.venuePickerText}>{v.name}</Text>
-                      <Text style={styles.venuePickerMeta}>{v.address}{v.city ? `, ${v.city}` : ""}{v.state ? `, ${v.state}` : ""}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
