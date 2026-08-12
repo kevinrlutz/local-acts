@@ -5,7 +5,8 @@
  * persisted to the primary database (e.g. as `Event.venueMapboxId`). Every
  * other field below (name, category, hours, popularity, coordinates, etc.)
  * comes from a live Mapbox API response or a short-TTL cache in front of one
- * — never write these fields to Firestore.
+ * — never write these display fields to Firestore; event documents may store
+ * the resolved venue coordinates alongside the Mapbox ID.
  */
 
 /** A pin on the map, from a Search Box `/category/{id}` result. */
@@ -28,6 +29,7 @@ export type VenueDetails = {
   /** 0-1 popularity score (score.popularity). Null when unavailable. */
   popularityScore: number | null;
   permanentlyClosed: boolean | null;
+  coordinates: { latitude: number; longitude: number } | null;
 };
 
 /** A single `/suggest` result, shown while the user is typing. */

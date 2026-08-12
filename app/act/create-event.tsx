@@ -145,12 +145,14 @@ export default function CreateEventScreen() {
 
       await createEvent(actProfile.id, {
         title: trimmedTitle,
-        location: trimmedLocation || undefined,
+        actCategory: actProfile.category,
+        location: trimmedLocation || (selectedVenue ? `${selectedVenue.name} - ${selectedVenue.fullAddress}` : undefined),
         ticketLink: validatedTicketLink,
         description: trimmedDescription || undefined,
         eventDate: parsedDate,
         hasTime,
         venueMapboxId: selectedVenue?.mapboxId ?? null,
+        venueCoordinates: selectedVenue?.coordinates ?? null,
       });
 
       router.replace((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(actProfile.id)}`) as Href);
@@ -226,7 +228,12 @@ export default function CreateEventScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Location (optional)</Text>
+              <Text style={styles.label}>Venue (optional)</Text>
+              <VenuePicker value={selectedVenue} onChange={setSelectedVenue} />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Location (optional - you can use this if your venue isn&apos;t listed)</Text>
               <TextInput
                 value={location}
                 onChangeText={setLocation}
@@ -260,11 +267,6 @@ export default function CreateEventScreen() {
                 numberOfLines={4}
                 textAlignVertical="top"
               />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Venue (optional)</Text>
-              <VenuePicker value={selectedVenue} onChange={setSelectedVenue} />
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}

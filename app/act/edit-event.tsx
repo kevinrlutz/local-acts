@@ -101,9 +101,19 @@ export default function EditEventScreen() {
           const venueMapboxId = existingEvent.venueMapboxId;
           try {
             const details = await getVenueDetails(venueMapboxId);
-            setSelectedVenue({ mapboxId: venueMapboxId, name: details.name, fullAddress: null });
+            setSelectedVenue({
+              mapboxId: venueMapboxId,
+              name: details.name,
+              fullAddress: null,
+              coordinates: details.coordinates ?? existingEvent.venueCoordinates ?? null,
+            });
           } catch {
-            setSelectedVenue({ mapboxId: venueMapboxId, name: "Selected venue", fullAddress: null });
+            setSelectedVenue({
+              mapboxId: venueMapboxId,
+              name: "Selected venue",
+              fullAddress: null,
+              coordinates: existingEvent.venueCoordinates ?? null,
+            });
           }
         }
       } catch (err) {
@@ -170,12 +180,14 @@ export default function EditEventScreen() {
 
       await updateEvent(event.id, {
         title: trimmedTitle,
-        location: trimmedLocation || undefined,
+        actCategory: actProfile.category,
+        location: trimmedLocation || (selectedVenue ? `${selectedVenue.name} - ${selectedVenue.fullAddress}` : undefined),
         ticketLink: validatedTicketLink,
         description: trimmedDescription || undefined,
         eventDate: parsedDate,
         hasTime,
         venueMapboxId: selectedVenue?.mapboxId ?? null,
+        venueCoordinates: selectedVenue?.coordinates ?? event.venueCoordinates ?? null,
       });
 
       router.replace((`${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(actProfile.id)}`) as Href);
@@ -251,7 +263,12 @@ export default function EditEventScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Location (optional)</Text>
+              <Text style={styles.label}>Venue (optional)</Text>
+              <VenuePicker value={selectedVenue} onChange={setSelectedVenue} />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Location (optional - you can use this if your venue isn&apos;t listed)</Text>
               <TextInput
                 value={location}
                 onChangeText={setLocation}
@@ -285,11 +302,6 @@ export default function EditEventScreen() {
                 numberOfLines={4}
                 textAlignVertical="top"
               />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Venue (optional)</Text>
-              <VenuePicker value={selectedVenue} onChange={setSelectedVenue} />
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}

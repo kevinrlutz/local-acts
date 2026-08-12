@@ -1,18 +1,19 @@
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    deleteField,
-    doc,
-    DocumentData,
-    getDoc,
-    getDocs,
-    orderBy,
-    query,
-    serverTimestamp,
-    Timestamp,
-    updateDoc,
-    where,
+  arrayRemove,
+  arrayUnion,
+  collection,
+  deleteField,
+  doc,
+  DocumentData,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  where,
+  writeBatch,
 } from "firebase/firestore";
 
 import { db } from "@/src/lib/firebase";
@@ -20,13 +21,14 @@ import type { ActEvent, CreateActEventPayload } from "@/src/types/acts";
 
 // Events are a top-level collection (not a sub-collection of `acts`),
 // correlated back to an act via `actUid` and to a venue via `venueMapboxId`.
-// Only `venueMapboxId` is ever stored for the venue side — never any of the
-// Mapbox response data itself (name/address/hours/etc).
+// The venue ID and coordinates are stored; Mapbox display data such as
+// name/address/hours is never persisted.
 //
 // NOTE: querying by `actUid` (+ orderBy eventDate) and by `venueMapboxId`
-// (+ eventDate range, + orderBy eventDate) each require a Firestore
-// composite index. Firestore will log a console link to create them the
-// first time each query runs against a fresh project.
+// (+ eventDate range, + orderBy eventDate) each require a Firestore composite
+// index. The map uses the automatic eventDate index, then applies its exact
+// latitude/longitude boundary check locally so it remains available before a
+// composite map index has been deployed.
 const EVENTS_COLLECTION = "events";
 
 const toDateOrNull = (value: unknown) => (value instanceof Timestamp ? value.toDate() : null);
@@ -34,6 +36,7 @@ const toDateOrNull = (value: unknown) => (value instanceof Timestamp ? value.toD
 const mapEventSnapshot = (id: string, data: DocumentData): ActEvent => ({
   id,
   actUid: data.actUid as string,
+  actCategory: data.actCategory as ActEvent["actCategory"],
   title: data.title as string,
   description: (data.description as string | undefined) ?? null,
   location: (data.location as string | undefined) ?? null,
@@ -41,18 +44,24 @@ const mapEventSnapshot = (id: string, data: DocumentData): ActEvent => ({
   eventDate: toDateOrNull(data.eventDate) ?? new Date(),
   hasTime: Boolean(data.hasTime),
   venueMapboxId: (data.venueMapboxId as string | undefined) ?? null,
+  venueCoordinates: (data.venueCoordinates as { latitude: number; longitude: number } | undefined) ?? null,
   createdAt: toDateOrNull(data.createdAt),
   updatedAt: toDateOrNull(data.updatedAt),
 });
 
-export const getEventsForAct = async (actUid: string): Promise<ActEvent[]> => {
-  const eventsQuery = query(
-    collection(db, EVENTS_COLLECTION),
-    where("actUid", "==", actUid),
-    orderBy("eventDate", "asc")
+export const getEventsForAct = async (
+  actUid: string,
+  eventUids: string[] = []
+): Promise<ActEvent[]> => {
+  const eventSnapshots = await Promise.all(
+    eventUids.map((eventUid) => getDoc(doc(db, EVENTS_COLLECTION, eventUid)))
   );
-  const snapshot = await getDocs(eventsQuery);
-  return snapshot.docs.map((d) => mapEventSnapshot(d.id, d.data()));
+  const now = new Date();
+  return eventSnapshots
+    .filter((snapshot) => snapshot.exists())
+    .map((snapshot) => mapEventSnapshot(snapshot.id, snapshot.data()))
+    .filter((event) => event.actUid === actUid && event.eventDate >= now)
+    .sort((first, second) => first.eventDate.getTime() - second.eventDate.getTime());
 };
 
 export const getEventById = async (eventId: string): Promise<ActEvent> => {
@@ -61,6 +70,44 @@ export const getEventById = async (eventId: string): Promise<ActEvent> => {
     throw new Error("Event not found.");
   }
   return mapEventSnapshot(eventSnap.id, eventSnap.data());
+};
+
+export type EventLocationBounds = {
+  minLatitude: number;
+  maxLatitude: number;
+  minLongitude: number;
+  maxLongitude: number;
+};
+
+const isWithinLocationBounds = (event: ActEvent, bounds: EventLocationBounds) => {
+  const coordinates = event.venueCoordinates;
+  return Boolean(
+    coordinates &&
+      coordinates.latitude >= bounds.minLatitude &&
+      coordinates.latitude <= bounds.maxLatitude &&
+      coordinates.longitude >= bounds.minLongitude &&
+      coordinates.longitude <= bounds.maxLongitude
+  );
+};
+
+const getDateRangeEvents = async (startDate: Date, endDate: Date): Promise<ActEvent[]> => {
+  const eventsQuery = query(
+    collection(db, EVENTS_COLLECTION),
+    where("eventDate", ">=", Timestamp.fromDate(startDate)),
+    where("eventDate", "<=", Timestamp.fromDate(endDate)),
+    orderBy("eventDate", "asc")
+  );
+  const snapshot = await getDocs(eventsQuery);
+  return snapshot.docs.map((eventDoc) => mapEventSnapshot(eventDoc.id, eventDoc.data()));
+};
+
+export const getEventsWithinLocationBounds = async (
+  bounds: EventLocationBounds,
+  startDate: Date,
+  endDate: Date
+): Promise<ActEvent[]> => {
+  const dateRangeEvents = await getDateRangeEvents(startDate, endDate);
+  return dateRangeEvents.filter((event) => isWithinLocationBounds(event, bounds));
 };
 
 export const createEvent = async (
@@ -75,6 +122,7 @@ export const createEvent = async (
   const eventPayload: Record<string, unknown> = {
     actUid,
     title: trimmedTitle,
+    actCategory: payload.actCategory,
     eventDate: Timestamp.fromDate(payload.eventDate),
     hasTime: Boolean(payload.hasTime),
     createdAt: serverTimestamp(),
@@ -99,9 +147,16 @@ export const createEvent = async (
   if (payload.venueMapboxId) {
     eventPayload.venueMapboxId = payload.venueMapboxId;
   }
+  if (payload.venueCoordinates) {
+    eventPayload.venueCoordinates = payload.venueCoordinates;
+  }
 
-  const docRef = await addDoc(collection(db, EVENTS_COLLECTION), eventPayload);
-  return docRef.id;
+  const eventRef = doc(collection(db, EVENTS_COLLECTION));
+  const eventWriteBatch = writeBatch(db);
+  eventWriteBatch.set(eventRef, eventPayload);
+  eventWriteBatch.update(doc(db, "acts", actUid), { eventUids: arrayUnion(eventRef.id) });
+  await eventWriteBatch.commit();
+  return eventRef.id;
 };
 
 export const updateEvent = async (
@@ -130,18 +185,26 @@ export const updateEvent = async (
   updatePayload.ticketLink = trimmedTicketLink ? trimmedTicketLink : deleteField();
 
   updatePayload.venueMapboxId = payload.venueMapboxId ?? deleteField();
+  updatePayload.venueCoordinates = payload.venueCoordinates ?? deleteField();
 
   await updateDoc(doc(db, EVENTS_COLLECTION, eventId), updatePayload);
 };
 
 export const deleteEvent = async (eventId: string): Promise<void> => {
-  await deleteDoc(doc(db, EVENTS_COLLECTION, eventId));
+  const event = await getEventById(eventId);
+  const eventWriteBatch = writeBatch(db);
+  eventWriteBatch.delete(doc(db, EVENTS_COLLECTION, eventId));
+  eventWriteBatch.update(doc(db, "acts", event.actUid), { eventUids: arrayRemove(eventId) });
+  await eventWriteBatch.commit();
 };
 
 export const deleteEventsForAct = async (actUid: string): Promise<void> => {
   const eventsQuery = query(collection(db, EVENTS_COLLECTION), where("actUid", "==", actUid));
   const snapshot = await getDocs(eventsQuery);
-  await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+  const eventWriteBatch = writeBatch(db);
+  snapshot.docs.forEach((eventDoc) => eventWriteBatch.delete(eventDoc.ref));
+  eventWriteBatch.update(doc(db, "acts", actUid), { eventUids: [] });
+  await eventWriteBatch.commit();
 };
 
 /** Upcoming (future) events at a given Mapbox venue. Entirely internal data

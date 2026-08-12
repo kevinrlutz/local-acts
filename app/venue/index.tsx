@@ -19,7 +19,7 @@ import { getVenueDetails, VenueNotFoundError } from "@/src/services/venueDetails
 import type { ActEvent } from "@/src/types/acts";
 import type { VenueDetails } from "@/src/types/venues";
 
-const ACT_PROFILE_ROUTE = "/act" as Href;
+const EVENT_PROFILE_ROUTE = "/event" as Href;
 
 const formatPopularity = (score: number | null) => {
   if (typeof score !== "number") return "Unknown";
@@ -221,7 +221,7 @@ export default function VenueProfileScreen() {
                     style={styles.eventCard}
                     onPress={() =>
                       router.push(
-                        `${ACT_PROFILE_ROUTE}?uid=${encodeURIComponent(event.actUid)}` as Href
+                        `${EVENT_PROFILE_ROUTE}?eventId=${encodeURIComponent(event.id)}` as Href
                       )
                     }
                   >

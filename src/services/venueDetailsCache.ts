@@ -1,8 +1,8 @@
 import {
-    MapboxApiError,
-    PLACES_BASE_URL,
-    assertMapboxToken,
-    placesRateLimiter,
+  MapboxApiError,
+  PLACES_BASE_URL,
+  assertMapboxToken,
+  placesRateLimiter,
 } from "@/src/lib/mapboxClient";
 import type { VenueDetails } from "@/src/types/venues";
 
@@ -62,17 +62,24 @@ const isCacheValid = (entry: CacheEntry | undefined): entry is CacheEntry =>
 const mapPlacesResponseToVenueDetails = (
   mapboxId: string,
   raw: Record<string, any>
-): VenueDetails => ({
-  mapboxId,
-  name: raw.name,
-  primaryCategory: formatCategoryName(raw.primary_category) ?? null,
-  categories: Array.isArray(raw.categories) ? raw.categories.map(formatCategoryName) : [],
-  openingHours: raw.opening_hours ?? null,
-  popularityScore:
-    typeof raw.score?.popularity === "number" ? raw.score.popularity : null,
-  permanentlyClosed:
-    typeof raw.permanently_closed === "boolean" ? raw.permanently_closed : null,
-});
+): VenueDetails => {
+  const [longitude, latitude] = raw.geometry?.coordinates ?? [];
+  return {
+    mapboxId,
+    name: raw.name,
+    primaryCategory: formatCategoryName(raw.primary_category) ?? null,
+    categories: Array.isArray(raw.categories) ? raw.categories.map(formatCategoryName) : [],
+    openingHours: raw.opening_hours ?? null,
+    popularityScore:
+      typeof raw.score?.popularity === "number" ? raw.score.popularity : null,
+    permanentlyClosed:
+      typeof raw.permanently_closed === "boolean" ? raw.permanently_closed : null,
+    coordinates:
+      typeof latitude === "number" && typeof longitude === "number"
+        ? { latitude, longitude }
+        : null,
+  };
+};
 
 const fetchFromPlaces = async (mapboxId: string): Promise<VenueDetails> => {
   const token = assertMapboxToken();
@@ -113,7 +120,6 @@ export const formatCategoryName = (name: string): string => {
         return "Venue"; // Fallback for empty/undefined names
     }
 
-    console.log('formatCategoryName called with name:', name); // Debugging log
     return name
         .toLowerCase()
         .split(/[\s_]+/)

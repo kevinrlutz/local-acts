@@ -14,6 +14,7 @@ export type ActProfile = {
   name: string;
   category: ActCategory;
   profileImageRef: string;
+  eventUids?: string[];
   description?: string | null;
   links?: ActSocialLinks | null;
   location: UserLocationPayload;
@@ -26,6 +27,7 @@ export type ActEvent = {
   /** Correlates this event to its act. Events live in their own top-level
    *  Firestore collection, not a sub-collection of `acts`. */
   actUid: string;
+  actCategory: ActCategory;
   title: string;
   description?: string | null;
   location?: string | null;
@@ -35,12 +37,14 @@ export type ActEvent = {
   /** Mapbox `mapbox_id` of the linked venue, if any. Only the id is ever
    *  persisted — never the rest of a Mapbox response (see venues brief). */
   venueMapboxId?: string | null;
+  venueCoordinates?: { latitude: number; longitude: number } | null;
   createdAt?: Date | null;
   updatedAt?: Date | null;
 };
 
 export type CreateActEventPayload = {
   title: string;
+  actCategory: ActCategory;
   description?: string;
   location?: string;
   ticketLink?: string;
@@ -48,6 +52,7 @@ export type CreateActEventPayload = {
   eventDate: Date;
   hasTime?: boolean;
   venueMapboxId?: string | null;
+  venueCoordinates?: { latitude: number; longitude: number } | null;
 };
 
 export type CreateActProfilePayload = {

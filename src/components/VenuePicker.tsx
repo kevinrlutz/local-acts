@@ -8,11 +8,12 @@ import type { VenueSuggestion } from "@/src/types/venues";
 
 /** What the parent form actually persists is `mapboxId` — `name`/`fullAddress`
  *  here are only kept in local component state to confirm the selection to
- *  the user, never written to the database. */
+ *  the user; the parent persists the resolved coordinates separately. */
 export type SelectedVenue = {
   mapboxId: string;
   name: string;
   fullAddress: string | null;
+  coordinates: { latitude: number; longitude: number } | null;
 };
 
 type VenuePickerProps = {
@@ -22,6 +23,7 @@ type VenuePickerProps = {
 };
 
 const SEARCH_DEBOUNCE_MS = 300;
+const MIN_QUERY_LENGTH = 5;
 
 export default function VenuePicker({ value, onChange, placeholder }: VenuePickerProps) {
   const [query, setQuery] = useState("");
@@ -44,15 +46,17 @@ export default function VenuePicker({ value, onChange, placeholder }: VenuePicke
 
   const runSearch = useCallback((text: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!text.trim()) {
+    const trimmed = text.trim();
+    if (trimmed.length < MIN_QUERY_LENGTH) {
       setSuggestions([]);
+      setError(null);
       return;
     }
     debounceRef.current = setTimeout(async () => {
       try {
         setIsSearching(true);
         setError(null);
-        const results = await suggestVenues(text, sessionTokenRef.current);
+        const results = await suggestVenues(trimmed, sessionTokenRef.current);
         setSuggestions(results);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Venue search failed.");
@@ -79,6 +83,7 @@ export default function VenuePicker({ value, onChange, placeholder }: VenuePicke
         mapboxId: resolved.mapboxId,
         name: resolved.name,
         fullAddress: resolved.fullAddress,
+        coordinates: resolved.coordinates,
       });
       setQuery("");
       setSuggestions([]);

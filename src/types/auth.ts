@@ -28,7 +28,6 @@ export type AppUser = {
   role?: UserRole | null
   photoUrl?: string | null
   hasActProfile?: boolean | null
-  hasVenueProfile?: boolean | null
   createdAt?: Date | null
   location?: UserLocation | null
   stageLightsEnabled?: boolean | null

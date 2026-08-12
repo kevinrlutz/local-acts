@@ -2,16 +2,16 @@ import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Linking,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -25,6 +25,7 @@ import { getDownloadURL, ref } from "firebase/storage";
 const EDIT_ACT_ROUTE = "/act/edit-act" as Href;
 const CREATE_EVENT_ROUTE = "/act/create-event" as Href;
 const EDIT_EVENT_ROUTE = "/act/edit-event" as Href;
+const EVENT_ROUTE = "/event" as Href;
 const VENUE_PROFILE_ROUTE = "/venue" as Href;
 
 const SOCIAL_LINK_LABELS: Partial<Record<keyof NonNullable<ActProfile["links"]>, string>> = {
@@ -110,13 +111,13 @@ export default function ActProfileScreen() {
   useEffect(() => {
     let isMounted = true;
     const fetchEvents = async () => {
-      if (!actUid) {
+      if (!actUid || !actProfile || actProfile.id !== actUid) {
         setIsEventsLoading(false);
         return;
       }
       try {
         setIsEventsLoading(true);
-        const nextEvents = await getEventsForAct(actUid);
+        const nextEvents = await getEventsForAct(actUid, actProfile.eventUids ?? []);
         if (isMounted) {
           setEvents(nextEvents);
         }
@@ -133,7 +134,7 @@ export default function ActProfileScreen() {
     return () => {
       isMounted = false;
     };
-  }, [actUid]);
+  }, [actUid, actProfile]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -214,6 +215,10 @@ export default function ActProfileScreen() {
   const handleEditEventPress = (eventId: string) => {
     if (!actProfile) return;
     router.push((`${EDIT_EVENT_ROUTE}?uid=${encodeURIComponent(actProfile.id)}&eventId=${encodeURIComponent(eventId)}`) as Href);
+  };
+
+  const handleViewEventPress = (eventId: string) => {
+    router.push(`${EVENT_ROUTE}?eventId=${encodeURIComponent(eventId)}` as Href);
   };
 
   const handleOpenLink = async (url: string) => {
@@ -308,7 +313,7 @@ export default function ActProfileScreen() {
             ) : events && events.length ? (
               <View style={styles.eventList}>
                 {events.map((event) => (
-                  <View key={event.id} style={styles.eventCard}>
+                  <Pressable key={event.id} style={styles.eventCard} onPress={() => handleViewEventPress(event.id)}>
                     <View style={styles.eventHeader}>
                       <View style={styles.eventTitleGroup}>
                         <Text style={styles.eventTitle}>{event.title}</Text>
@@ -350,10 +355,10 @@ export default function ActProfileScreen() {
                           )
                         }
                       >
-                        <Text style={styles.ticketButtonText}>View Venue</Text>
+                        <Text style={styles.editButtonText}>View Venue</Text>
                       </Pressable>
                     ) : null}
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             ) : (

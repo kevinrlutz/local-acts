@@ -70,15 +70,3 @@ export const updateStageLightsPreference = async (
     { merge: true }
   )
 }
-
-export const updateHasVenueProfile = async (
-  uid: string,
-  value: boolean
-): Promise<void> => {
-  const userDocRef = doc(db, "users", uid)
-  await setDoc(
-    userDocRef,
-    { hasVenueProfile: value, updatedAt: serverTimestamp() },
-    { merge: true }
-  )
-}

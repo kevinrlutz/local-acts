@@ -25,20 +25,17 @@ import {
   getAppUserFromFirestore,
   updateStageLightsPreference,
 } from "../src/services/userProfile";
-import { getVenuePinsForArea } from "../src/services/venueCategorySearch";
 
+import { formatCategoryName } from '@/src/services/venueDetailsCache';
 import type { ActCategory, ActProfile } from "@/src/types/acts";
 import { AppUser } from "@/src/types/auth";
-import type { VenuePin } from "@/src/types/venues";
 import Colors from "../src/Colors";
-import { formatCategoryName } from '@/src/services/venueDetailsCache';
 
 const LOGIN_ROUTE = "/(auth)/login" as Href
 const ACCOUNT_SETUP_ROUTE = "/(auth)/account-setup" as Href
 const UPDATE_LOCATION_ROUTE = "/update-location" as Href
 const CREATE_ACT_ROUTE = "/act/create-act" as Href
 const ACT_PROFILE_ROUTE = "/act" as Href
-const VENUE_PROFILE_ROUTE = "/venue" as Href
 const MAP_ROUTE = "/map" as Href
 const PAGE_SIZE = 10
 const DISTANCE_OPTIONS = [5, 10, 25]
@@ -54,8 +51,6 @@ const {width: screenWidth} = Dimensions.get("window")
 const isMobile = screenWidth < 768
 
 type ActWithDistance = ActProfile & {distanceInMiles: number | null}
-type VenueWithDistance = VenuePin & {distanceInMiles: number | null}
-type ViewMode = "acts" | "venues"
 
 const EARTH_RADIUS_MILES = 3958.8
 
@@ -107,20 +102,12 @@ export default function Index() {
   const [user, setUser] = useState<User | null>(() => auth.currentUser)
   const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser)
   const [userProfile, setUserProfile] = useState<AppUser | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>("acts")
-  
-  // Acts state
+
   const [acts, setActs] = useState<ActProfile[]>([])
   const [actsLoading, setActsLoading] = useState(false)
   const [actsError, setActsError] = useState<string | null>(null)
   const [actImageUrls, setActImageUrls] = useState<Record<string, string>>({})
-  
-  // Venues state
-  const [venues, setVenues] = useState<VenuePin[]>([])
-  const [venuesLoading, setVenuesLoading] = useState(false)
-  const [venuesError, setVenuesError] = useState<string | null>(null)
-  
-  // Shared filters
+
   const [distanceFilter, setDistanceFilter] = useState<number>(
     DISTANCE_OPTIONS[1]
   )
@@ -197,59 +184,10 @@ export default function Index() {
     try {
       const allActs = await getAllActs()
       setActs(allActs)
-    } catch (error) {
-      console.error("Failed to fetch acts:", error)
-      setActsError("Unable to load acts right now.")
-    } finally {
-      setActsLoading(false)
-    }
-  }, [user])
 
-  const fetchVenues = useCallback(async () => {
-    const coordinates = userProfile?.location?.coordinates
-    if (!user || !coordinates) {
-      setVenues([])
-      return
-    }
-    setVenuesLoading(true)
-    setVenuesError(null)
-    try {
-      const pins = await getVenuePinsForArea({
-        latitude: coordinates.latitude,
-        longitude: coordinates.longitude,
-        radiusMiles: distanceFilter,
-      })
-      setVenues(pins)
-    } catch (error) {
-      console.error("Failed to fetch venues:", error)
-      setVenuesError("Unable to load venues right now.")
-    } finally {
-      setVenuesLoading(false)
-    }
-  }, [user, userProfile?.location?.coordinates, distanceFilter])
-
-  useEffect(() => {
-    fetchActs()
-    fetchVenues()
-  }, [fetchActs, fetchVenues])
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchActs()
-      fetchVenues()
-      fetchProfile()
-    }, [fetchActs, fetchVenues, fetchProfile])
-  )
-
-  useEffect(() => {
-    if (acts.length === 0) {
-      setActImageUrls({})
-      return
-    }
-    const fetchUrls = async () => {
       const urls: Record<string, string> = {}
       await Promise.all(
-        acts.map(async (act) => {
+        allActs.map(async (act) => {
           if (act.profileImageRef) {
             try {
               const url = await getDownloadURL(
@@ -266,9 +204,20 @@ export default function Index() {
         })
       )
       setActImageUrls(urls)
+    } catch (error) {
+      console.error("Failed to fetch acts:", error)
+      setActsError("Unable to load acts right now.")
+    } finally {
+      setActsLoading(false)
     }
-    fetchUrls()
-  }, [acts])
+  }, [user])
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchActs()
+      fetchProfile()
+    }, [fetchActs, fetchProfile])
+  )
 
   useEffect(() => {
     setCurrentPage(1)
@@ -318,23 +267,6 @@ export default function Index() {
     })
   }, [acts, userCoordinates])
 
-  const venuesWithDistance = useMemo<VenueWithDistance[]>(() => {
-    return venues.map((venue) => {
-      if (userCoordinates && venue.coordinates) {
-        const {latitude: venueLat, longitude: venueLon} = venue.coordinates
-        const {latitude: userLat, longitude: userLon} = userCoordinates
-        const distance = calculateDistanceMiles(
-          userLat,
-          userLon,
-          venueLat,
-          venueLon
-        )
-        return {...venue, distanceInMiles: distance}
-      }
-      return {...venue, distanceInMiles: null}
-    })
-  }, [venues, userCoordinates])
-
   const filteredActs = useMemo(() => {
     const categoryFiltered = actsWithDistance.filter((act) =>
       categoryFilter.includes("All") ? true : categoryFilter.includes(act.category)
@@ -361,40 +293,8 @@ export default function Index() {
       })
   }, [actsWithDistance, categoryFilter, distanceFilter, userCoordinates])
 
-  const filteredVenues = useMemo(() => {
-    const categoryFiltered = venuesWithDistance.filter((venue) =>
-      categoryFilter.includes("All") ? true : categoryFilter.includes(venue.category)
-    )
-
-    if (!userCoordinates) {
-      return categoryFiltered
-    }
-
-    return categoryFiltered
-      .filter(
-        (venue) =>
-          typeof venue.distanceInMiles === "number" &&
-          venue.distanceInMiles <= distanceFilter
-      )
-      .sort((a, b) => {
-        if (a.distanceInMiles === null) {
-          return 1
-        }
-        if (b.distanceInMiles === null) {
-          return -1
-        }
-        return a.distanceInMiles - b.distanceInMiles
-      })
-  }, [venuesWithDistance, categoryFilter, distanceFilter, userCoordinates])
-
-  const currentCategoryOptions = useMemo(() => {
-    if (viewMode === "acts") return ACT_CATEGORY_OPTIONS
-    const unique = Array.from(new Set(venues.map((v) => v.category))).sort()
-    return ["All", ...unique]
-  }, [viewMode, venues])
-  const currentFilteredList = viewMode === "acts" ? filteredActs : filteredVenues
-  const totalPages = Math.max(1, Math.ceil(currentFilteredList.length / PAGE_SIZE))
-  const paginatedList = currentFilteredList.slice(
+  const totalPages = Math.max(1, Math.ceil(filteredActs.length / PAGE_SIZE))
+  const paginatedList = filteredActs.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   )
@@ -445,47 +345,21 @@ export default function Index() {
     [actImageUrls, router]
   )
 
-  const renderVenueItem = useCallback(
-    ({item}: {item: VenueWithDistance}) => (
-      <Pressable
-        style={styles.card}
-        onPress={() =>
-          router.push(
-            `${VENUE_PROFILE_ROUTE}?mapboxId=${encodeURIComponent(item.mapboxId)}` as Href
-          )
-        }
-      >
-        <View style={styles.itemContent}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemMeta}>{formatCategoryName(item.category)}</Text>
-          {typeof item.distanceInMiles === "number" && (
-            <Text style={styles.itemDistance}>
-              {item.distanceInMiles.toFixed(1)} miles away
-            </Text>
-          )}
-        </View>
-      </Pressable>
-    ),
-    [router]
-  )
-
   const renderEmpty = useCallback(
     () => (
       <View style={styles.emptyState}>
-        {viewMode === "acts" && actsLoading ? (
-          <ActivityIndicator color={Colors.secondaryAction} />
-        ) : viewMode === "venues" && venuesLoading ? (
+        {actsLoading ? (
           <ActivityIndicator color={Colors.secondaryAction} />
         ) : (
           <Text style={styles.emptyText}>
             {userCoordinates
-              ? `No ${viewMode === "acts" ? "acts" : "venues"} match your current filters. Try expanding the distance or picking a different category.`
-              : `Add a location to start discovering ${viewMode === "acts" ? "acts" : "venues"} nearby.`}
+              ? "No acts match your current filters. Try expanding the distance or picking a different category."
+              : "Add a location to start discovering acts nearby."}
           </Text>
         )}
       </View>
     ),
-    [actsLoading, venuesLoading, userCoordinates, viewMode]
+    [actsLoading, userCoordinates]
   )
 
   const advancePage = (delta: number) => {
@@ -507,11 +381,6 @@ export default function Index() {
   const handleMenuActPress = () => {
     closeMenu()
     goToAct()
-  }
-
-  const handleMenuVenuePress = () => {
-    closeMenu()
-    goToVenue()
   }
 
   const handleMenuSignOut = () => {
@@ -558,8 +427,8 @@ export default function Index() {
       {stageLightsEnabled && <StageLights />}
       <FlatList<any>
         data={paginatedList}
-        keyExtractor={(item) => (viewMode === "acts" ? item.id : item.mapboxId)}
-        renderItem={viewMode === "acts" ? renderActItem : renderVenueItem}
+        keyExtractor={(item) => item.id}
+        renderItem={renderActItem}
         ListEmptyComponent={renderEmpty}
         ListHeaderComponent={
           <View style={styles.headerContainer}>
@@ -585,7 +454,7 @@ export default function Index() {
               {user.displayName || user.email || "New Local Acts fan"}!
             </Text>
             <Text style={styles.subtitle}>
-              Currently discovering {viewMode === "acts" ? "acts" : "venues"} in {locationSummary}
+              Currently discovering acts in {locationSummary}
             </Text>
             <Pressable
               style={styles.primaryButton}
@@ -599,50 +468,6 @@ export default function Index() {
                   : "Finish Profile Setup"}
               </Text>
             </Pressable>
-            
-            {/* View Mode Toggle */}
-            <View style={styles.viewModeToggle}>
-              <Pressable
-                style={[
-                  styles.toggleButton,
-                  viewMode === "acts" && styles.toggleButtonActive,
-                ]}
-                onPress={() => {
-                  setViewMode("acts")
-                  setCurrentPage(1)
-                  setCategoryFilter(["All"])
-                }}
-              >
-                <Text
-                  style={[
-                    styles.toggleButtonText,
-                    viewMode === "acts" && styles.toggleButtonTextActive,
-                  ]}
-                >
-                  Acts
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.toggleButton,
-                  viewMode === "venues" && styles.toggleButtonActive,
-                ]}
-                onPress={() => {
-                  setViewMode("venues")
-                  setCurrentPage(1)
-                  setCategoryFilter(["All"])
-                }}
-              >
-                <Text
-                  style={[
-                    styles.toggleButtonText,
-                    viewMode === "venues" && styles.toggleButtonTextActive,
-                  ]}
-                >
-                  Venues
-                </Text>
-              </Pressable>
-            </View>
 
             <View style={styles.secondaryButtonRow}>
               <Pressable
@@ -653,14 +478,10 @@ export default function Index() {
               </Pressable>
               <Pressable
                 style={styles.halfButton}
-                onPress={viewMode === "acts" ? goToAct : goToVenue}
+                onPress={goToVenue}
               >
                 <Text style={styles.secondaryButtonText}>
-                  {viewMode === "acts"
-                    ? userProfile?.hasActProfile
-                      ? "Manage Act"
-                      : "Create Act"
-                    : "Browse Venues"}
+                  {"Browse Venues"}
                 </Text>
               </Pressable>
             </View>
@@ -696,7 +517,7 @@ export default function Index() {
               <View style={styles.filterColumn}>
                 <Text style={styles.filterLabel}>Category</Text>
                 <View style={styles.chipRow}>
-                  {(viewMode === "acts" ? ACT_CATEGORY_OPTIONS : currentCategoryOptions).map((category) => (
+                  {ACT_CATEGORY_OPTIONS.map((category) => (
                     <Pressable
                       key={category}
                       style={[
@@ -730,15 +551,11 @@ export default function Index() {
                 </View>
               </View>
             </View>
-            {(viewMode === "acts" ? actsError : venuesError) && (
-              <Text style={styles.errorText}>
-                {viewMode === "acts" ? actsError : venuesError}
-              </Text>
-            )}
+            {actsError && <Text style={styles.errorText}>{actsError}</Text>}
           </View>
         }
         ListFooterComponent={
-          currentFilteredList.length > 0 ? (
+          filteredActs.length > 0 ? (
             <View style={styles.footerContainer}>
               <View style={styles.pagination}>
                 <Pressable
@@ -790,9 +607,6 @@ export default function Index() {
                   ? "Manage Act Profile"
                   : "Create Act Profile"}
               </Text>
-            </Pressable>
-            <Pressable style={styles.menuAction} onPress={handleMenuVenuePress}>
-              <Text style={styles.menuActionText}>Browse Venues</Text>
             </Pressable>
             {Platform.OS === 'web' && (
               <Pressable
@@ -1119,32 +933,5 @@ const styles = StyleSheet.create({
   menuActionText: {
     color: Colors.primaryWhite,
     fontWeight: "600",
-  },
-  viewModeToggle: {
-    flexDirection: "row",
-    gap: 8,
-    width: "90%",
-    maxWidth: 360,
-  },
-  toggleButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.contentBorder,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-    backgroundColor: Colors.secondaryBackground,
-  },
-  toggleButtonActive: {
-    backgroundColor: Colors.secondaryAction,
-    borderColor: Colors.secondaryAction,
-  },
-  toggleButtonText: {
-    color: Colors.primaryWhite,
-    fontWeight: "600",
-  },
-  toggleButtonTextActive: {
-    color: Colors.secondaryBackground,
-    fontWeight: "700",
   },
 })

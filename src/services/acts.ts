@@ -37,6 +37,7 @@ const mapActSnapshot = (id: string, data: DocumentData): ActProfile => ({
   name: data.name as string,
   category: data.category as ActProfile["category"],
   profileImageRef: data.profileImageRef as string,
+  eventUids: (data.eventUids as string[] | undefined) ?? [],
   description: (data.description as string | undefined) ?? null,
   links: (data.links as ActSocialLinks | undefined) ?? null,
   location: data.location as ActProfile["location"],
