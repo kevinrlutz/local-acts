@@ -13,6 +13,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -99,6 +100,8 @@ const formatActDescriptionPreview = (description?: string | null) => {
 
 export default function Index() {
   const router = useRouter()
+  const {width: viewportWidth} = useWindowDimensions()
+  const isMobileViewport = viewportWidth < 768
   const [user, setUser] = useState<User | null>(() => auth.currentUser)
   const [checkingAuth, setCheckingAuth] = useState(!auth.currentUser)
   const [userProfile, setUserProfile] = useState<AppUser | null>(null)
@@ -431,8 +434,18 @@ export default function Index() {
         renderItem={renderActItem}
         ListEmptyComponent={renderEmpty}
         ListHeaderComponent={
-          <View style={styles.headerContainer}>
-            <View style={styles.menuWrapper}>
+          <View
+            style={[
+              styles.headerContainer,
+              isMobileViewport && styles.mobileHeaderContainer,
+            ]}
+          >
+            <View
+              style={[
+                styles.menuWrapper,
+                isMobileViewport && styles.mobileMenuWrapper,
+              ]}
+            >
               <Pressable
                 style={styles.menuButton}
                 accessibilityRole="button"
@@ -442,13 +455,27 @@ export default function Index() {
                 <Feather name="menu" size={24} color={Colors.primaryWhite} />
               </Pressable>
             </View>
-            <Image
-              source={require("@/assets/images/icon.png")}
-              style={styles.logo}
-              accessibilityRole="image"
-              accessibilityLabel="Local Acts logo"
-            />
-            <Text style={styles.title}>Local Acts</Text>
+            {isMobileViewport ? (
+              <View style={styles.mobileBrand}>
+                <Image
+                  source={require("@/assets/images/icon.png")}
+                  style={styles.mobileLogo}
+                  accessibilityRole="image"
+                  accessibilityLabel="Local Acts logo"
+                />
+                <Text style={styles.mobileTitle}>Local Acts</Text>
+              </View>
+            ) : (
+              <>
+                <Image
+                  source={require("@/assets/images/icon.png")}
+                  style={styles.logo}
+                  accessibilityRole="image"
+                  accessibilityLabel="Local Acts logo"
+                />
+                <Text style={styles.title}>Local Acts</Text>
+              </>
+            )}
             <Text style={styles.subtitle}>
               Welcome back,{" "}
               {user.displayName || user.email || "New Local Acts fan"}!
@@ -641,6 +668,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
   },
+  mobileHeaderContainer: {
+    width: "100%",
+    position: "relative",
+  },
   footerContainer: {
     paddingTop: 16,
     alignItems: "center",
@@ -728,9 +759,34 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 24,
   },
+  mobileBrand: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+  mobileLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+  },
+  mobileTitle: {
+    color: Colors.primaryWhite,
+    fontSize: 20,
+    fontWeight: "700",
+  },
   menuWrapper: {
     width: "100%",
     alignItems: "flex-end",
+  },
+  mobileMenuWrapper: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: "auto",
+    zIndex: 1,
   },
   menuButton: {
     marginTop: 8,
